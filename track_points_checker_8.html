@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>REVUP — spacePts checker &amp; track builder</title>
+<style>
+:root{--tarmac:#17141b;--panel:#221d2b;--cream:#f0e7d3;--cream-dim:#b9ae95;--purple:#8a5cf6;--heat:#e3492b;--stress:#d8c23a;--line:#4a3f63}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--tarmac);color:var(--cream);font-family:"Avenir Next Condensed","Arial Narrow",system-ui,sans-serif;padding:14px}
+h1{font-size:20px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
+.sub{color:var(--cream-dim);font-size:13px;margin-bottom:12px}
+#tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+#tabs button{padding:8px 14px;border-radius:8px;border:2px solid #4a3f63;background:var(--panel);color:var(--cream);font:inherit;font-size:14px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
+#tabs button.sel{border-color:var(--purple);background:#3a2a5e;box-shadow:0 0 8px rgba(138,92,246,.4)}
+#tabs button.build{border-color:#3fa7d6;color:#bfe6f7}
+#tabs button.build.sel{background:#123a4d;border-color:#3fa7d6;box-shadow:0 0 8px rgba(63,167,214,.45)}
+#controls{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:13px}
+#controls label{display:flex;align-items:center;gap:5px;cursor:pointer}
+#controls button{padding:6px 12px;border-radius:7px;border:2px solid var(--purple);background:var(--panel);color:var(--cream);font:inherit;font-size:13px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
+#controls button:hover{background:#3a2a5e}
+#svgwrap{background:#3e5039;border-radius:10px;overflow:hidden;border:1px solid #000;max-width:1200px}
+svg{display:block;width:100%;height:auto}
+/* while a point is selected the board stops eating one-finger drags as scroll:
+   one finger = move the point, two fingers = pinch / pan the page as usual */
+svg.locked{touch-action:pinch-zoom}
+#svgwrap.locked{outline:2px solid var(--purple);outline-offset:-2px}
+.pt{cursor:pointer}
+.pt.selected{cursor:grab;touch-action:none}
+.pt.selected:active{cursor:grabbing}
+.hnd{cursor:grab;touch-action:none}
+.hnd:active{cursor:grabbing}
+#legend{display:flex;gap:16px;flex-wrap:wrap;margin:10px 0;font-size:12px;color:var(--cream-dim)}
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:-1px;margin-right:4px}
+#report{max-width:1200px;background:var(--panel);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55}
+#report b{color:var(--stress)}
+#exportbox{width:100%;max-width:1200px;margin-top:8px;background:#12101a;color:#cfe3b8;border:1px solid #333;border-radius:8px;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;line-height:1.5;display:none;white-space:pre}
+
+/* ---------- builder ---------- */
+#builder{display:none;max-width:1200px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+#builder.on{display:block}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.bcard{background:#1a1622;border:1px solid #3a3247;border-radius:8px;padding:10px}
+.bcard h3{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--purple);margin-bottom:8px;font-weight:800}
+.f{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12px;color:var(--cream-dim)}
+.f label{flex:0 0 78px;text-transform:uppercase;letter-spacing:.6px;font-size:10px}
+.f input[type=text],.f input[type=number],.f select{flex:1;min-width:0;background:#12101a;border:1px solid #3a3247;border-radius:6px;color:var(--cream);font:inherit;font-size:13px;padding:5px 7px}
+.f input[type=color]{width:34px;height:26px;padding:0;border:1px solid #3a3247;border-radius:5px;background:#12101a}
+.f input:focus,.f select:focus{outline:2px solid var(--purple);outline-offset:1px}
+.hint{font-size:11px;color:#7e7490;line-height:1.5;margin-top:6px}
+#cornerlist{display:flex;flex-direction:column;gap:5px;max-height:230px;overflow:auto;padding-right:2px}
+.crow{display:grid;grid-template-columns:16px 58px 52px 1fr 26px;gap:5px;align-items:center}
+.crow .cn{font-size:10px;color:#7e7490;text-align:right}
+.crow input{background:#12101a;border:1px solid #3a3247;border-radius:5px;color:var(--cream);font:inherit;font-size:12px;padding:4px 5px;width:100%;min-width:0}
+.crow .del{background:none;border:1px solid #5a2f2a;color:#e3492b;border-radius:5px;font:inherit;font-size:13px;line-height:1;padding:4px 0;cursor:pointer}
+.crow .del:hover{background:#3a1f1c}
+.chead{display:grid;grid-template-columns:16px 58px 52px 1fr 26px;gap:5px;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#6c637f;margin-bottom:4px}
+.btn{padding:6px 10px;border-radius:7px;border:2px solid var(--purple);background:#2a2237;color:var(--cream);font:inherit;font-size:12px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
+.btn:hover{background:#3a2a5e}
+.btn.ghost{border-color:#4a3f63}
+.btn.go{border-color:#3fa7d6;background:#123a4d;color:#d6f0fb}
+.btn.go:hover{background:#18506b}
+.brow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.warn{color:var(--heat)}
+#topbar{max-width:1200px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:9px 12px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;font-size:12px}
+.tbrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tbrow > span.lbl{text-transform:uppercase;letter-spacing:1.4px;font-size:10px;color:var(--purple);
+  font-weight:800;flex:0 0 92px}
+#topbar input[type=text]{background:#12101a;border:1px solid #3a3247;border-radius:6px;color:var(--cream);
+  font:inherit;padding:5px 8px;min-width:0;flex:1 1 210px}
+#topbar input[type=text]:focus{outline:2px solid var(--purple);outline-offset:1px}
+#topbar input[type=range]{width:110px;accent-color:var(--purple)}
+.stat{font-size:11px;color:#7e7490;flex:1 1 100%}
+.stat.bad{color:var(--heat)}
+.stat.good{color:#8ecf6a}
+.tentrow{display:grid;grid-template-columns:16px 46px 52px 52px 46px 26px;gap:4px;align-items:center}
+.tentrow input{background:#12101a;border:1px solid #3a3247;border-radius:5px;color:var(--cream);
+  font:inherit;font-size:11px;padding:3px 4px;width:100%;min-width:0}
+.tentrow input.bad{border-color:#e3492b;color:#ffb199}
+.tentrow .del{background:none;border:1px solid #5a2f2a;color:#e3492b;border-radius:5px;font:inherit;
+  font-size:11px;cursor:pointer;padding:2px 0}
+.tentrow .del:hover{background:#3a1f1c}
+.thead{display:grid;grid-template-columns:16px 46px 52px 52px 46px 26px;gap:4px;font-size:9px;
+  letter-spacing:.6px;text-transform:uppercase;color:#7e7490;margin-bottom:4px}
+#tentlist{display:flex;flex-direction:column;gap:5px;max-height:200px;overflow:auto;padding-right:4px}
+.ok{color:#8ecf6a}
+
+/* ---------- gravel / tunnel brushes ---------- */
+.paintrow{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.pbtn{padding:5px 8px;border-radius:6px;border:2px solid #4a3f63;background:#12101a;color:var(--cream-dim);
+  font:inherit;font-size:11px;letter-spacing:.6px;text-transform:uppercase;cursor:pointer}
+.pbtn:hover{border-color:#6d5c92}
+.pbtn.sel{border-color:#c8a86b;background:#3a3020;color:#f0e7d3;box-shadow:0 0 8px rgba(200,168,107,.4)}
+.pbtn.sel[data-m="tun"]{border-color:#9ad0f0;background:#12303f;color:#dff2fd;box-shadow:0 0 8px rgba(154,208,240,.4)}
+.pbtn.sel[data-m="erase"]{border-color:#e3492b;background:#3a1f1c;color:#ffd2c6;box-shadow:0 0 8px rgba(227,73,43,.4)}
+.pbtn.sel[data-m="off"]{border-color:var(--purple);background:#3a2a5e;color:#f0e7d3;box-shadow:0 0 8px rgba(138,92,246,.4)}
+</style>
+</head>
+<body>
+<h1>REVUP — spacePts checker &amp; track builder</h1>
+<div class="sub">Check an existing board’s space centres, or <b style="color:#bfe6f7">build a new circuit</b> from a template and export it straight into <code>index_20.html</code>. Corner lines are drawn <i>before</i> their <code>at</code> index — crossing into that space triggers the check.</div>
+<div id="tabs"></div>
+
+<div id="topbar">
+  <div class="tbrow">
+    <span class="lbl">REVUP file</span>
+    <button class="btn ghost" id="revpick">Choose index_20.html…</button>
+    <input type="file" id="revfile" accept=".html,.htm" style="display:none">
+    <input type="text" id="revurl" placeholder="index_20.html — or a raw GitHub URL">
+    <button class="btn ghost" id="revfetch">Fetch</button>
+    <button class="btn ghost" id="revforget" title="Drop imported tracks, keep the built-ins">Forget imported</button>
+    <span class="stat" id="revstat">Import the game file to pull in every track it defines — they become tabs here and options in “Start from”.</span>
+  </div>
+  <div class="tbrow">
+    <span class="lbl">Board image</span>
+    <input type="text" id="bgpath" placeholder="tracks/Pukekohe.jpeg">
+    <button class="btn ghost" id="bgload">Import</button>
+    <button class="btn ghost" id="bgpick">Choose file…</button>
+    <input type="file" id="bgfile" accept="image/*" style="display:none">
+    <label style="display:flex;align-items:center;gap:5px;color:var(--cream-dim)">Fade
+      <input type="range" id="bgop" min="10" max="100" value="90"></label>
+    <span class="stat" id="bgstat">Type a path relative to this file (e.g. <b>tracks/Pukekohe.jpeg</b>) and hit Import — nothing gets baked into the html.</span>
+  </div>
+</div>
+
+<!-- ================= TRACK BUILDER ================= -->
+<div id="builder">
+  <div class="bgrid">
+
+    <div class="bcard">
+      <h3>Circuit</h3>
+      <div class="f"><label>Name</label><input type="text" id="b_name"></div>
+      <div class="f"><label>Key</label><input type="text" id="b_key"></div>
+      <div class="f"><label>Subtitle</label><input type="text" id="b_subtitle"></div>
+      <div class="f"><label>Eyebrow</label><input type="text" id="b_eyebrow"></div>
+      <div class="f"><label>Tagline</label><input type="text" id="b_tagline"></div>
+      <div class="f"><label>Terrain</label><select id="b_terrain">
+        <option value="oval">oval — infield oval</option>
+        <option value="mountain">mountain — forest</option>
+        <option value="parkland">parkland — dry scrub</option>
+        <option value="farmland">farmland — green paddocks</option>
+      </select></div>
+      <div class="hint">Terrain picks the art-board style the game paints under the ribbon. Key must be unique and lowercase.</div>
+    </div>
+
+    <div class="bcard">
+      <h3>Layout</h3>
+      <div class="f"><label>Spaces</label><input type="number" id="b_spaces" min="12" max="200" step="1"></div>
+      <div class="f"><label>Shape</label><select id="b_shape">
+        <option value="circle">Circle</option>
+        <option value="oval">Oval</option>
+        <option value="stadium">Stadium</option>
+        <option value="rrect">Rounded rectangle</option>
+        <option value="twisty">Twisty loop</option>
+      </select></div>
+      <div class="f"><label>Laps</label><input type="number" id="b_laps" min="1" max="6" step="1"></div>
+      <div class="f"><label>Heat</label><input type="number" id="b_heat" min="0" max="12" step="1"></div>
+      <div class="f"><label>Stress</label><input type="number" id="b_stress" min="0" max="12" step="1"></div>
+      <div class="f"><label>Legends</label><input type="number" id="b_legends" min="1" max="20" step="1"></div>
+      <div class="hint">Change <b>Spaces</b> any time — the points are re-spread evenly along the shape you’ve dragged, and corners keep their position round the lap.</div>
+      <div class="brow">
+        <button class="btn ghost" id="b_reshape">Reset to shape</button>
+        <button class="btn ghost" id="b_even">Even out spacing</button>
+        <button class="btn ghost" id="b_smooth">Smooth</button>
+      </div>
+    </div>
+
+    <div class="bcard">
+      <h3>Corners</h3>
+      <div class="chead"><span></span><span>Before</span><span>Limit</span><span>Name (optional)</span><span></span></div>
+      <div id="cornerlist"></div>
+      <div class="brow">
+        <button class="btn ghost" id="b_addcorner">Add corner</button>
+        <button class="btn ghost" id="b_spacecorners">Spread evenly</button>
+      </div>
+      <div class="hint"><b>Before</b> = the space index the corner line sits in front of. <b>Limit</b> = the speed you must be at or under when you cross it.</div>
+    </div>
+
+    <div class="bcard">
+      <h3>Board furniture</h3>
+      <div class="f"><label>Weather</label><input type="number" id="b_wx" step="1"><input type="number" id="b_wy" step="1"><input type="number" id="b_wr" step="1"></div>
+      <div class="f"><label>Panel</label><input type="number" id="b_px" step="1"><input type="number" id="b_py" step="1"></div>
+      <div class="f"><label>Podium</label><input type="number" id="b_dx" step="1"><input type="number" id="b_dy" step="1"></div>
+      <div class="hint">x / y (/ radius) in board coordinates, 1200×800. Easier: drag the dashed boxes straight on the board.</div>
+    </div>
+
+    <div class="bcard">
+      <h3>Name plate</h3>
+      <div class="f"><label>Title</label><input type="text" id="b_ptitle"></div>
+      <div class="f"><label>Sub</label><input type="text" id="b_psub"></div>
+      <div class="f"><label>x / y</label><input type="number" id="b_plx" step="1"><input type="number" id="b_ply" step="1"></div>
+      <div class="f"><label>w / h</label><input type="number" id="b_plw" step="1"><input type="number" id="b_plh" step="1"></div>
+      <div class="f"><label>Rotation</label><input type="number" id="b_plrot" step="1" min="-30" max="30"></div>
+      <div class="f"><label>Colours</label><input type="color" id="b_pcol1"><input type="color" id="b_pcol2"><span style="font-size:10px">title / sub</span></div>
+    </div>
+
+    <div class="bcard">
+      <h3>Tents</h3>
+      <div class="thead"><span></span><span>Corner</span><span>x</span><span>y</span><span>Rot</span><span></span></div>
+      <div id="tentlist"></div>
+      <div class="brow">
+        <button class="btn ghost" id="b_autotent">Auto-place all</button>
+        <button class="btn ghost" id="b_cleartent">Clear</button>
+      </div>
+      <div class="hint">One marquee per corner — it holds that corner's Road Condition token. Drag the tent to move it, drag its <b>▲ knob</b> to spin it. <b>Corner</b> is the space its line sits before.</div>
+    </div>
+
+    <div class="bcard">
+      <h3>Gravel &amp; Tunnels</h3>
+      <div class="paintrow" id="paintmodes"></div>
+      <div class="f"><label>Gravel in</label><input type="text" id="b_gin" placeholder="e.g. 12-15, 22"></div>
+      <div class="f"><label>Gravel out</label><input type="text" id="b_gout" placeholder="e.g. 13-15"></div>
+      <div class="f"><label>Tunnels</label><input type="text" id="b_tun" placeholder="e.g. 20-26, 44-48"></div>
+      <div class="brow">
+        <button class="btn ghost" id="b_cleargravel">Clear gravel</button>
+        <button class="btn ghost" id="b_cleartun">Clear tunnels</button>
+      </div>
+      <div class="hint">Pick a brush, then <b>tap or sweep spaces on the board</b> to paint them. Tap a painted space again to undo it.
+        <b>In</b> = the Spot nearest the Race Line, <b>Out</b> = the outside Spot — gravel can sit on either or both.
+        Tunnels cover whole Spaces and are stored as runs, so ranges wrap past the start line (<b>70-4</b> is fine).
+        Typing in the boxes works too: <code>12-15, 22</code>.</div>
+    </div>
+
+    <div class="bcard">
+      <h3>Move &amp; export</h3>
+      <div class="f"><label style="flex:0 0 auto">Start from</label>
+        <select id="b_clone"></select>
+        <button class="btn ghost" id="b_cloneGo">Load</button>
+      </div>
+      <div class="brow">
+        <button class="btn ghost" id="b_rotL">↺ 5°</button>
+        <button class="btn ghost" id="b_rotR">↻ 5°</button>
+        <button class="btn ghost" id="b_shrink">− size</button>
+        <button class="btn ghost" id="b_grow">+ size</button>
+        <button class="btn ghost" id="b_centre">Centre</button>
+        <button class="btn ghost" id="b_flip">Reverse</button>
+      </div>
+      <div class="brow">
+        <button class="btn go" id="b_export">Export track code</button>
+        <button class="btn ghost" id="b_new">Start over</button>
+      </div>
+      <div class="hint">Tick <b>Move whole track</b> above, then drag anywhere on the board to slide the whole lap around.</div>
+    </div>
+
+  </div>
+</div>
+
+<div id="controls">
+  <label id="lbl_img"><input type="checkbox" id="cbimg" checked> Board photo</label>
+  <label><input type="checkbox" id="cbribbon" checked> Track ribbon</label>
+  <label><input type="checkbox" id="cbidx" checked> Index labels</label>
+  <label><input type="checkbox" id="cbgap" checked> Flag spacing outliers</label>
+  <label><input type="checkbox" id="cbfeat" checked> Gravel &amp; tunnels</label>
+  <label id="lbl_move" style="display:none;color:#bfe6f7"><input type="checkbox" id="cbmove"> Move whole track</label>
+  <button id="btnexport">Export corrected spacePts</button>
+  <button id="btnreset">Reset edits</button>
+</div>
+
+<div id="legend">
+  <span><span class="dot" style="background:#f0e7d3"></span>space centre</span>
+  <span><span class="dot" style="background:#e3492b"></span>corner space (speed-limit shown)</span>
+  <span><span class="dot" style="background:#d8c23a;border-radius:2px"></span>spacing outlier (gap ≫ or ≪ median)</span>
+  <span><span class="dot" style="background:#3fa7d6"></span>space 0 (start/finish)</span>
+  <span style="color:#e3492b">━ corner line (crossing point)</span>
+  <span><span class="dot" style="background:#c8a86b"></span>gravel Spot (offset in / out from the Space)</span>
+  <span style="color:#9ad0f0">▬ tunnel (no discarding from hand while inside)</span>
+</div>
+<div id="svgwrap"><svg id="svg" viewBox="0 0 1200 800"></svg></div>
+<div id="report"></div>
+<textarea id="exportbox" rows="10" readonly spellcheck="false"></textarea>
+
+<script>
+const TRACKS = {"pukekohe":{"key":"pukekohe","name":"Pukekohe","spaces":72,"imgW":1200,"imgH":800,"image":"tracks/Pukekohe.jpeg","corners":[{"at":9,"limit":3},{"at":15,"limit":3},{"at":32,"limit":7},{"at":57,"limit":4}],"spacePts":[[523,577],[487,567],[447,547],[409,520],[366,510],[325,489],[283,470],[240,457],[194,459],[155,488],[146,541],[156,582],[178,626],[190,676],[177,723],[136,745],[92,749],[64,713],[48,669],[46,623],[48,577],[53,530],[56,484],[57,437],[62,391],[64,345],[71,299],[73,253],[74,206],[77,160],[83,114],[104,74],[146,60],[190,59],[233,47],[277,52],[321,52],[365,51],[410,50],[454,51],[498,52],[543,50],[587,45],[631,42],[675,43],[719,49],[762,59],[804,73],[846,87],[888,103],[929,121],[969,139],[1010,157],[1050,176],[1091,192],[1124,201],[1143,240],[1143,280],[1090,327],[1021,336],[973,346],[930,370],[888,396],[849,427],[826,470],[803,514],[778,556],[742,590],[697,610],[648,615],[599,606],[553,589]]},"panorama":{"key":"panorama","name":"Mount Panorama","spaces":73,"imgW":1200,"imgH":800,"image":"","corners":[{"at":7,"limit":2,"name":"Hell Corner"},{"at":16,"limit":3,"name":"Griffin's Bend"},{"at":20,"limit":2,"name":"The Cutting"},{"at":23,"limit":4,"name":"Reid Park"},{"at":26,"limit":4,"name":"Sulman Park"},{"at":29,"limit":3,"name":"McPhillamy Park"},{"at":32,"limit":2,"name":"Skyline"},{"at":35,"limit":3,"name":"Esses Entry"},{"at":38,"limit":2,"name":"The Dipper"},{"at":41,"limit":2,"name":"Forrest's Elbow"},{"at":55,"limit":4,"name":"The Chase L"},{"at":58,"limit":2,"name":"The Chase R"},{"at":61,"limit":3,"name":"Chase Exit"},{"at":66,"limit":2,"name":"Murray's Corner"}],"spacePts":[[168,610],[163,627],[156,643],[152,660],[169,681],[195,691],[222,697],[250,701],[310,707],[370,710],[430,711],[500,711],[570,711],[640,710],[705,708],[770,704],[835,699],[875,693],[915,684],[950,670],[983,653],[1011,633],[1036,610],[1057,584],[1076,548],[1087,510],[1092,470],[1091,433],[1086,396],[1077,360],[1062,321],[1042,286],[1017,253],[998,232],[979,214],[959,195],[940,178],[920,162],[898,151],[869,147],[840,148],[812,149],[771,144],[730,135],[690,126],[640,119],[590,117],[540,118],[493,121],[446,122],[400,121],[358,118],[317,116],[275,118],[236,128],[196,149],[172,167],[152,188],[139,214],[139,241],[144,267],[149,292],[150,320],[148,348],[143,376],[138,403],[133,430],[130,460],[131,491],[138,520],[148,541],[158,561],[166,583]]},"easterncreek":{"key":"easterncreek","name":"Eastern Creek","spaces":73,"imgW":1200,"imgH":800,"image":"","corners":[{"at":7,"limit":4,"name":"Turn 1"},{"at":18,"limit":2,"name":"Turn 2 (Hairpin)"},{"at":21,"limit":3,"name":"Turn 3"},{"at":27,"limit":4,"name":"Turn 4"},{"at":37,"limit":5,"name":"Turn 5"},{"at":48,"limit":2,"name":"Turn 6"},{"at":56,"limit":7,"name":"Turn 7"},{"at":61,"limit":5,"name":"Turn 8"}],"spacePts":[[500,100],[447,93],[395,85],[342,78],[290,71],[237,70],[185,80],[138,104],[109,148],[99,199],[93,252],[87,305],[83,358],[80,411],[80,464],[87,516],[109,564],[155,586],[193,553],[189,501],[173,450],[176,402],[225,383],[278,382],[331,382],[384,385],[436,392],[473,428],[488,479],[495,531],[499,584],[523,631],[561,668],[605,697],[654,718],[704,735],[756,744],[807,733],[832,688],[835,635],[822,584],[805,534],[784,485],[758,439],[719,404],[673,378],[625,355],[573,343],[570,333],[623,328],[676,322],[729,319],[782,317],[834,320],[885,335],[928,365],[980,374],[1031,362],[1077,336],[1116,300],[1142,258],[1119,211],[1074,183],[1024,164],[973,149],[922,137],[870,126],[818,118],[765,112],[712,108],[659,105],[606,103],[553,103]]},"manfeild":{"key":"manfeild","name":"Manfeild","spaces":74,"imgW":1200,"imgH":800,"image":"","corners":[{"at":9,"limit":4,"name":"Turn 1 (Hairpin)"},{"at":16,"limit":4,"name":"Turn 2"},{"at":28,"limit":3,"name":"Turn 3 (Esses)"},{"at":45,"limit":2,"name":"Turn 4 (Esses)"},{"at":63,"limit":5,"name":"Turn 5 (Hook)"}],"spacePts":[[587,650],[524,652],[461,654],[398,655],[335,654],[272,653],[209,650],[146,643],[86,625],[45,579],[47,517],[70,459],[118,420],[179,402],[241,405],[294,437],[326,490],[381,521],[442,538],[503,550],[566,556],[628,547],[691,538],[753,531],[816,537],[873,513],[922,474],[971,434],[993,382],[935,369],[877,346],[819,320],[759,303],[698,287],[636,272],[575,259],[513,247],[451,236],[389,227],[326,222],[263,219],[200,211],[139,221],[87,255],[73,200],[125,170],[187,159],[250,151],[313,146],[376,145],[439,146],[502,149],[564,153],[627,158],[690,166],[752,176],[814,187],[876,200],[937,214],[998,231],[1056,254],[1106,292],[1141,344],[1155,405],[1142,466],[1115,524],[1076,572],[1023,606],[963,625],[901,638],[839,646],[776,650],[713,651],[650,650]]},"montjuic":{"key":"montjuic","name":"Montjuic","spaces":54,"imgW":1200,"imgH":800,"image":"tracks/Montjuic.jpeg","corners":[{"at":9,"limit":2},{"at":14,"limit":3},{"at":20,"limit":4},{"at":28,"limit":3},{"at":36,"limit":6}],"spacePts":[[662,248],[620,207],[576,175],[525,163],[469,153],[413,133],[354,116],[295,103],[235,111],[194,145],[235,177],[280,224],[308,277],[331,341],[307,385],[235,360],[193,284],[131,280],[111,361],[109,428],[144,457],[167,476],[205,500],[257,521],[267,533],[275,587],[276,647],[277,708],[297,760],[357,763],[417,763],[478,763],[539,763],[596,756],[667,738],[684,677],[736,690],[784,716],[850,723],[906,730],[960,711],[1009,675],[1071,648],[1089,585],[1115,532],[1123,474],[1095,421],[1053,380],[997,362],[937,362],[877,371],[817,376],[758,364],[706,333]]}};
+const IMAGES = {};   /* nothing is baked in any more — the board photo is loaded from the
+                        relative path in the track ("tracks/Pukekohe.jpeg"), or from disk
+                        via the "Choose file…" button. Keeps this file small. */
+
+const BKEY = "__build__";
+let cur = "pukekohe";
+let selected = null;    // index of the currently selected point (tap to select, then drag)
+let pts = {};           // working copies, per track
+for(const k in TRACKS) pts[k] = TRACKS[k].spacePts.map(p=>[p[0],p[1]]);
+
+/* board backgrounds, per track key: {path, href, ok, w, h}. Nothing is ever
+   baked into this file — we just point an <image> at a relative path. */
+const BG = {};
+
+const svg = document.getElementById("svg");
+const NS = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+
+/* =====================================================================
+   TRACK BUILDER — state
+   ===================================================================== */
+const BW = 1200, BH = 800;
+
+function freshBuild(){
+  return {
+    key:"mytrack", name:"My Circuit", subtitle:"Custom build",
+    eyebrow:"Custom Grand Prix · My Circuit",
+    tagline:"Hand-built fan board",
+    spaces:72, defaultLaps:2, heat:6, stress:3, legendsLine:7,
+    terrain:"oval", shape:"circle",
+    imgW:BW, imgH:BH, image:"",
+    plate:{x:860,y:640,w:300,h:112,rot:-2,title:"GRAND PRIX",sub:"MY CIRCUIT",
+           titleColor:"#173a2a",subColor:"#0f5132"},
+    panel:{x:600,y:330}, podium:{x:600,y:180}, weatherTok:{x:700,y:300,r:38},
+    corners:[{at:9,limit:3,name:""},{at:27,limit:4,name:""},{at:45,limit:3,name:""},{at:63,limit:5,name:""}],
+    tents:[],
+    gravel: emptyGravel(),
+    tunnels: [],
+    spacePts: shapePoints("circle", 72)
+  };
+}
+let BUILD = loadBuild() || freshBuild();
+
+const isBuild = () => cur === BKEY;
+const T = () => isBuild() ? BUILD : TRACKS[cur];
+const P = () => isBuild() ? BUILD.spacePts : pts[cur];
+
+/* ---------- shape generation -------------------------------------------
+   Every preset is sampled densely, then resampled to N equal-length steps,
+   so spaces always sit an even distance apart whatever the outline. */
+function outline(shape){
+  const cx = BW/2, cy = BH/2, N = 720, out = [];
+  for(let i=0;i<N;i++){
+    const t = i/N * Math.PI*2;   // t = π/2 is bottom-centre; travel runs clockwise
+    const a = t + Math.PI/2;
+    let x, y;
+    if(shape==="circle"){
+      const r = Math.min(BW,BH)*0.40;
+      x = cx + r*Math.cos(a); y = cy + r*Math.sin(a);
+    } else if(shape==="oval"){
+      x = cx + BW*0.40*Math.cos(a); y = cy + BH*0.37*Math.sin(a);
+    } else if(shape==="stadium" || shape==="rrect"){
+      const w = BW*0.80, h = BH*0.70;
+      const r = shape==="stadium" ? h/2 : Math.min(w,h)*0.26;
+      const p = roundRectPoint(cx, cy, w, h, r, i/N);
+      x = p[0]; y = p[1];
+    } else { // twisty — an irregular loop to drag into shape
+      const k = 1 + 0.18*Math.cos(2*a) + 0.10*Math.sin(3*a);
+      x = cx + BW*0.36*k*Math.cos(a); y = cy + BH*0.33*k*Math.sin(a);
+    }
+    out.push([x,y]);
+  }
+  return out;
+}
+
+/* point at fraction u (0-1) around a rounded rectangle, clockwise from bottom-centre */
+function roundRectPoint(cx, cy, w, h, r, u){
+  const sw = w-2*r, sh = h-2*r, arc = Math.PI*r/2;
+  const segs = [sw/2, sh, sw, sh, sw/2];          // half-bottom, left, top, right, half-bottom
+  const arcs = [arc, arc, arc, arc];
+  const tot = segs.reduce((a,b)=>a+b,0) + arcs.reduce((a,b)=>a+b,0);
+  let d = u*tot;
+  const L = cx-w/2, R = cx+w/2, Tp = cy-h/2, B = cy+h/2;
+  // bottom-centre → left along the bottom edge
+  if(d < segs[0]) return [cx-d, B];
+  d -= segs[0];
+  if(d < arcs[0]){ const t=d/arcs[0]*Math.PI/2; return [L+r-r*Math.sin(t), B-r+r*Math.cos(t)]; }
+  d -= arcs[0];
+  if(d < segs[1]) return [L, B-r-d];
+  d -= segs[1];
+  if(d < arcs[1]){ const t=d/arcs[1]*Math.PI/2; return [L+r-r*Math.cos(t), Tp+r-r*Math.sin(t)]; }
+  d -= arcs[1];
+  if(d < segs[2]) return [L+r+d, Tp];
+  d -= segs[2];
+  if(d < arcs[2]){ const t=d/arcs[2]*Math.PI/2; return [R-r+r*Math.sin(t), Tp+r-r*Math.cos(t)]; }
+  d -= arcs[2];
+  if(d < segs[3]) return [R, Tp+r+d];
+  d -= segs[3];
+  if(d < arcs[3]){ const t=d/arcs[3]*Math.PI/2; return [R-r+r*Math.cos(t), B-r+r*Math.sin(t)]; }
+  d -= arcs[3];
+  return [R-r-d, B];
+}
+
+function shapePoints(shape, n){ return resample(outline(shape), n); }
+
+/* resample a closed polyline to n evenly spaced points, keeping point 0 put */
+function resample(Q, n){
+  const m = Q.length, seg = [], cum = [0];
+  let tot = 0;
+  for(let i=0;i<m;i++){
+    const a = Q[i], b = Q[(i+1)%m];
+    const L = Math.hypot(b[0]-a[0], b[1]-a[1]);
+    seg.push(L); tot += L; cum.push(tot);
+  }
+  const out = [];
+  let j = 0;
+  for(let k=0;k<n;k++){
+    const target = k*tot/n;
+    while(j < m-1 && cum[j+1] < target) j++;
+    const t = seg[j] ? (target-cum[j])/seg[j] : 0;
+    const a = Q[j], b = Q[(j+1)%m];
+    out.push([Math.round(a[0]+(b[0]-a[0])*t), Math.round(a[1]+(b[1]-a[1])*t)]);
+  }
+  return out;
+}
+
+/* =====================================================================
+   TRACK FEATURES — gravel Spots and tunnel Spaces
+   ---------------------------------------------------------------------
+   gravel : { inner:[…space indices…], outer:[…] }
+            A Space has two Spots. Gravel can be on the one nearest the
+            Race Line (inner), the outside one (outer), or both — a space
+            in both lists has gravel right across it. Rule: at the end of
+            your turn (step 9) a car sitting on a gravel Spot pays 1 Heat
+            if it has any in the Engine.
+   tunnels: [ {from, to} … ]  inclusive runs of Spaces, wrapping allowed
+            (from > to means the run crosses the start line). Rule: while
+            a car is on a tunnel Space the player cannot discard from hand
+            — this beats any Event / Upgrade / Road Condition that would
+            let them. Cooldown (goes to the Engine) and Scrap (comes off
+            the draw deck) are not discards, so both are still fine.
+   ===================================================================== */
+function emptyGravel(){ return {inner:[], outer:[]}; }
+
+function clampList(a, n){
+  const s = new Set();
+  (Array.isArray(a) ? a : []).forEach(v=>{
+    v = parseInt(v,10);
+    if(Number.isFinite(v) && v >= 0 && v < n) s.add(v);
+  });
+  return [...s].sort((x,y)=>x-y);
+}
+function normGravel(g, n){
+  if(Array.isArray(g)) g = {inner:g, outer:[]};      // tolerate a bare list of spaces
+  g = g || {};
+  return {inner: clampList(g.inner, n), outer: clampList(g.outer, n)};
+}
+/* accepts runs, bare numbers, or a mix — always hands back tidy merged runs */
+function normTunnels(t, n){
+  const set = new Set();
+  (Array.isArray(t) ? t : []).forEach(r=>{
+    if(typeof r === "number"){ if(r >= 0 && r < n) set.add(r|0); return; }
+    if(!r) return;
+    let f = parseInt(r.from,10);
+    let to = parseInt(r.to,10);
+    if(!Number.isFinite(f)) return;
+    if(!Number.isFinite(to)) to = f;
+    f = ((f % n)+n)%n; to = ((to % n)+n)%n;
+    let i = f;
+    for(let k=0;k<n;k++){ set.add(i); if(i === to) break; i = (i+1)%n; }
+  });
+  return mergeRuns(set, n);
+}
+function runsToSet(runs, n){
+  const s = new Set();
+  for(const r of runs || []){
+    let i = ((r.from % n)+n)%n, end = ((r.to % n)+n)%n;
+    for(let k=0;k<n;k++){ s.add(i); if(i === end) break; i = (i+1)%n; }
+  }
+  return s;
+}
+/* a set of space indices → the fewest inclusive runs that cover it (wrap-aware) */
+function mergeRuns(set, n){
+  if(!set || !set.size) return [];
+  if(set.size >= n) return [{from:0, to:n-1}];
+  const has = i => set.has(((i%n)+n)%n);
+  const runs = [];
+  for(const i of [...set].sort((a,b)=>a-b)){
+    if(has(i-1)) continue;                       // only open a run at its first space
+    let j = i;
+    while(has(j)) j++;                           // safe: size < n guarantees a gap
+    runs.push({from:i, to:((j-1)%n+n)%n});
+  }
+  return runs.sort((a,b)=>a.from-b.from);
+}
+function inTunnel(runs, i, n){
+  for(const r of runs || []){
+    if(r.from <= r.to){ if(i >= r.from && i <= r.to) return true; }
+    else if(i >= r.from || i <= r.to) return true;
+  }
+  return false;
+}
+
+/* "12-15, 22, 70-4" → a set of space indices (ranges may wrap past 0) */
+function parseSpaceList(str, n){
+  const s = new Set();
+  String(str||"").split(/[,;]+/).forEach(chunk=>{
+    chunk = chunk.trim();
+    if(!chunk) return;
+    const m = chunk.match(/^(\d+)\s*(?:-|–|—|\.\.|to)\s*(\d+)$/i);
+    if(m){
+      const a = Math.min(+m[1], n-1), b = Math.min(+m[2], n-1);
+      let i = a;
+      for(let k=0;k<n;k++){ s.add(i); if(i === b) break; i = (i+1)%n; }
+    }else{
+      const v = parseInt(chunk,10);
+      if(Number.isFinite(v) && v >= 0 && v < n) s.add(v);
+    }
+  });
+  return s;
+}
+const fmtRuns   = runs => (runs||[]).map(r => r.from === r.to ? String(r.from) : r.from+"–"+r.to).join(", ");
+const fmtSpaces = (list, n) => fmtRuns(mergeRuns(new Set(list||[]), n));
+
+/* ---------- builder edits ---------- */
+function setSpaces(n){
+  n = Math.max(12, Math.min(200, n|0));
+  const old = BUILD.spacePts.length;
+  if(n === old) return;
+  const map  = i => Math.max(0, Math.min(n-1, Math.round(i/old*n)));
+  const tset = runsToSet(BUILD.tunnels, old);     // grab the old spaces before the count moves
+  BUILD.spacePts = resample(BUILD.spacePts, n);   // keep the dragged shape, respread the points
+  BUILD.spaces = n;
+  // corners hold their place around the lap — and their tents come with them
+  const at = i => Math.max(1, Math.min(n-1, Math.round(i/old*n)));
+  remapCorners(BUILD.corners.map(c => at(c.at)), at);
+  // so do gravel and tunnels
+  BUILD.gravel = {inner: clampList(BUILD.gravel.inner.map(map), n),
+                  outer: clampList(BUILD.gravel.outer.map(map), n)};
+  BUILD.tunnels = mergeRuns(new Set([...tset].map(map)), n);
+  dedupeCorners();
+}
+
+/* Move every corner to its new space (newAts runs parallel to BUILD.corners) and
+   drag each tent along to the corner it was pinned to. A tent that isn't on any
+   corner falls back to `stray` if given, otherwise it stays put. If two corners
+   land on the same space only one marquee survives — there's only ever one per
+   corner. */
+function remapCorners(newAts, stray){
+  const moved = new Map();
+  BUILD.corners.forEach((c,i)=>{ moved.set(c.at, newAts[i]); c.at = newAts[i]; });
+  const seen = new Set();
+  BUILD.tents = BUILD.tents.filter(t=>{
+    const to = moved.has(t.at) ? moved.get(t.at) : (stray ? stray(t.at) : t.at);
+    if(seen.has(to)) return false;
+    seen.add(to);
+    t.at = to;
+    return true;
+  });
+  BUILD.tents.sort((a,b)=>a.at-b.at);
+  // Where you'd nudged a tent by hand we leave it exactly where you put it. But if
+  // its corner has just moved right across the board, the marquee is stranded on a
+  // silly long leader — so re-park that one beside its corner.
+  const Q = BUILD.spacePts;
+  for(const t of BUILD.tents){
+    const b = boundary(Q, t.at);
+    if(Math.hypot(b.x - t.x, b.y - t.y) > 220) Object.assign(t, autoTent(Q, t.at));
+  }
+}
+function dedupeCorners(){
+  BUILD.corners.sort((a,b)=>a.at-b.at);
+  const seen = new Set();
+  BUILD.corners = BUILD.corners.filter(c=>{
+    c.at = Math.max(1, Math.min(BUILD.spaces-1, c.at|0));
+    c.limit = Math.max(1, Math.min(20, c.limit|0));
+    if(seen.has(c.at)) return false;
+    seen.add(c.at); return true;
+  });
+}
+/* Tents sit on the track, so they ride along with it. The plate / panel / podium
+   / weather token don't — they're board furniture, pinned to the board, not the lap. */
+function transformAll(fn, spin){
+  BUILD.spacePts = BUILD.spacePts.map(fn);
+  BUILD.tents.forEach(t=>{
+    const [x,y] = fn([t.x, t.y]);
+    t.x = x; t.y = y;
+    if(spin) t.rot = Math.round((((t.rot||0) + spin) % 360 + 360) % 360);
+  });
+}
+function centroid(Q){
+  const s = Q.reduce((a,p)=>[a[0]+p[0],a[1]+p[1]],[0,0]);
+  return [s[0]/Q.length, s[1]/Q.length];
+}
+function rotateAll(deg){
+  const [cx,cy] = centroid(BUILD.spacePts), r = deg*Math.PI/180;
+  transformAll(p=>{
+    const dx=p[0]-cx, dy=p[1]-cy;
+    return [Math.round(cx+dx*Math.cos(r)-dy*Math.sin(r)), Math.round(cy+dx*Math.sin(r)+dy*Math.cos(r))];
+  }, deg);   // the marquees turn with the corner they're parked on
+}
+function scaleAll(f){
+  const [cx,cy] = centroid(BUILD.spacePts);
+  transformAll(p=>[Math.round(cx+(p[0]-cx)*f), Math.round(cy+(p[1]-cy)*f)]);
+}
+function centreAll(){
+  const [cx,cy] = centroid(BUILD.spacePts), dx = BW/2-cx, dy = BH/2-cy;
+  transformAll(p=>[Math.round(p[0]+dx), Math.round(p[1]+dy)]);
+}
+function smoothAll(){
+  const Q = BUILD.spacePts, n = Q.length;
+  const out = Q.map((p,i)=>{
+    const a = Q[(i-1+n)%n], b = Q[(i+1)%n];
+    return [Math.round(a[0]*0.25+p[0]*0.5+b[0]*0.25), Math.round(a[1]*0.25+p[1]*0.5+b[1]*0.25)];
+  });
+  BUILD.spacePts = resample(out, n);
+}
+function reverseAll(){   // flip travel direction, keeping space 0 where it is
+  const Q = BUILD.spacePts, n = Q.length;
+  const map  = j => j === 0 ? 0 : n - j;          // where old space j ends up
+  const tset = runsToSet(BUILD.tunnels, n);
+  BUILD.spacePts = [Q[0], ...Q.slice(1).reverse()];
+  const at = i => Math.max(1, n - i);
+  remapCorners(BUILD.corners.map(c => at(c.at)), at);   // tents follow their corners round
+  // inner/outer are geometry, not travel direction, so the two lists don't swap
+  BUILD.gravel = {inner: clampList(BUILD.gravel.inner.map(map), n),
+                  outer: clampList(BUILD.gravel.outer.map(map), n)};
+  BUILD.tunnels = mergeRuns(new Set([...tset].map(map)), n);
+  dedupeCorners();
+}
+
+/* =====================================================================
+   TENTS — one marquee per corner, holding that corner's Road Condition token
+   ===================================================================== */
+/* geometry of the corner line before space `at`: midpoint, tangent, normal */
+function boundary(Q, at){
+  const n = Q.length, a = Q[(at-1+n)%n], b = Q[at%n];
+  const dx = b[0]-a[0], dy = b[1]-a[1], L = Math.hypot(dx,dy)||1;
+  return {x:(a[0]+b[0])/2, y:(a[1]+b[1])/2, tx:dx/L, ty:dy/L, nx:dy/L, ny:-dx/L,
+          ang: Math.atan2(dy,dx)*180/Math.PI};
+}
+/* which way is "away from the track" at this boundary — use the lap centroid */
+function outwardSign(Q, b){
+  const [cx,cy] = centroid(Q);
+  return ((b.x-cx)*b.nx + (b.y-cy)*b.ny) >= 0 ? 1 : -1;
+}
+function autoTent(Q, at, dist){
+  const b = boundary(Q, at), s = outwardSign(Q, b), d = dist || 96;
+  return {at,
+    x: Math.round(Math.max(30, Math.min(BW-30, b.x + b.nx*s*d))),
+    y: Math.round(Math.max(28, Math.min(BH-28, b.y + b.ny*s*d))),
+    rot: Math.round(b.ang)};
+}
+function autoTents(){
+  const Q = BUILD.spacePts;
+  const have = new Set(BUILD.tents.map(t=>t.at));
+  for(const c of BUILD.corners) if(!have.has(c.at)) BUILD.tents.push(autoTent(Q, c.at));
+  BUILD.tents.sort((a,b)=>a.at-b.at);
+}
+const tentIssues = () => {
+  const ats = new Set((isBuild()?BUILD:T()).corners.map(c=>c.at));
+  return (T().tents||[]).map(t=>!ats.has(t.at));
+};
+
+/* =====================================================================
+   IMPORTING REVUP — scrape every `const TRACK_X = {…}` out of the game file
+   ===================================================================== */
+/* walk from the opening brace to its partner, skipping strings and comments */
+function matchBrace(src, i){
+  let depth = 0, str = null, esc = false;
+  for(; i < src.length; i++){
+    const c = src[i];
+    if(str){
+      if(esc){ esc = false; continue; }
+      if(c === "\\"){ esc = true; continue; }
+      if(c === str) str = null;
+      continue;
+    }
+    if(c === '"' || c === "'" || c === "`"){ str = c; continue; }
+    if(c === "/" && src[i+1] === "/"){ const nl = src.indexOf("\n", i); if(nl < 0) return -1; i = nl; continue; }
+    if(c === "/" && src[i+1] === "*"){ const e = src.indexOf("*/", i); if(e < 0) return -1; i = e+1; continue; }
+    if(c === "{") depth++;
+    else if(c === "}"){ depth--; if(depth === 0) return i; }
+  }
+  return -1;
+}
+function extractTracks(text){
+  const found = [], re = /const\s+(TRACK_[A-Za-z0-9_]+)\s*=\s*\{/g;
+  let m;
+  while((m = re.exec(text))){
+    const open = text.indexOf("{", m.index);
+    const close = matchBrace(text, open);
+    if(close < 0) continue;
+    try{
+      const obj = (new Function("return (" + text.slice(open, close+1) + ")"))();
+      if(obj && obj.key && Array.isArray(obj.spacePts) && obj.spacePts.length && Array.isArray(obj.corners))
+        found.push(obj);
+    }catch(err){ /* not a track literal — skip it */ }
+    re.lastIndex = close;
+  }
+  return found;
+}
+function mergeTracks(list, label){
+  let added = 0, updated = 0;
+  for(const t of list){
+    t.spaces = t.spaces || t.spacePts.length;
+    t.imgW = t.imgW || BW; t.imgH = t.imgH || BH;
+    t.corners = t.corners || [];
+    t.tents = Array.isArray(t.tents) ? t.tents : [];
+    t.gravel = normGravel(t.gravel, t.spaces);
+    t.tunnels = normTunnels(t.tunnels, t.spaces);
+    if(TRACKS[t.key]) updated++; else added++;
+    TRACKS[t.key] = t;
+    pts[t.key] = t.spacePts.map(p=>[p[0],p[1]]);
+    if(t.image) BG[t.key] = {path:t.image, href:t.image, ok:null};
+  }
+  saveImported();
+  rebuildTabs();
+  refreshClone();
+  revStat(list.length
+    ? `Imported <b>${list.length}</b> track${list.length>1?"s":""} from ${label} — ${added} new, ${updated} refreshed. They're tabs above and options in “Start from”.`
+    : `No <b>const TRACK_… = { … }</b> blocks found in ${label}. Is that the game file?`, list.length ? "good" : "bad");
+  if(list.length) draw();
+}
+function saveImported(){
+  try{
+    const extra = {};
+    for(const k in TRACKS) if(!BUILTIN.has(k)) extra[k] = TRACKS[k];
+    localStorage.setItem("revup_imported", JSON.stringify(extra));
+  }catch(err){}
+}
+function loadImported(){
+  try{
+    const raw = localStorage.getItem("revup_imported");
+    if(!raw) return;
+    const extra = JSON.parse(raw);
+    for(const k in extra){
+      const t = extra[k];
+      if(!t || !Array.isArray(t.spacePts) || !t.spacePts.length) continue;
+      TRACKS[k] = t;
+      pts[k] = t.spacePts.map(p=>[p[0],p[1]]);
+      if(t.image) BG[k] = {path:t.image, href:t.image, ok:null};
+    }
+  }catch(err){}
+}
+
+/* =====================================================================
+   DRAWING
+   ===================================================================== */
+function median(a){const s=[...a].sort((x,y)=>x-y);const m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2}
+function dist(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1])}
+function gaps(Q){ return Q.map((p,i)=>dist(p,Q[(i+1)%Q.length])); }
+
+function el(tag, attrs, text){
+  const e = document.createElementNS(NS, tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  if(text!==undefined) e.textContent = text;
+  return e;
+}
+
+function draw(){
+  const t = T(), Q = P();
+  const bg = BG[cur];
+  const href = !$("cbimg").checked ? null
+             : (bg && bg.ok && bg.href) ? bg.href
+             : (IMAGES[cur] || null);
+  const showImg = !!href;
+  const showRib = $("cbribbon").checked;
+  const showIdx = $("cbidx").checked;
+  const showGap = $("cbgap").checked;
+  const showFeat = $("cbfeat").checked;
+  svg.setAttribute("viewBox","0 0 "+t.imgW+" "+t.imgH);
+  // a point is being inspected → one-finger drags belong to the point, not the page
+  svg.classList.toggle("locked", selected !== null);
+  $("svgwrap").classList.toggle("locked", selected !== null);
+  svg.innerHTML = "";
+  svg.appendChild(featDefs());
+
+  if(showImg){
+    svg.appendChild(el("image",{href, x:0, y:0, width:t.imgW, height:t.imgH,
+      opacity:(+$("bgop").value/100), preserveAspectRatio:"xMidYMid slice"}));
+  }
+
+  const d = "M "+Q.map(p=>p[0]+" "+p[1]).join(" L ")+" Z";
+  if(showRib){
+    for(const [c,w,o] of [["#0d0b12",46,showImg?0.45:1],["#8a5cf6",30,showImg?0.3:0.55],["#f0e7d3",7,showImg?0.55:1]]){
+      svg.appendChild(el("path",{d,fill:"none",stroke:c,"stroke-width":w,"stroke-linejoin":"round",opacity:o}));
+    }
+  }
+
+  if(showFeat){                 // tunnels first — the roof goes over the tarmac
+    drawTunnels(t, Q);          // and gravel sits on top of it, still readable
+    drawGravel(t, Q);
+  }
+
+  if(isBuild()) drawFurniture();
+  drawTents(t, isBuild());
+
+  // spacing outliers
+  const g = gaps(Q), med = median(g);
+  const outliers = new Set();
+  if(showGap) g.forEach((gv,i)=>{ if(gv>1.6*med || gv<0.55*med) outliers.add(i); });
+
+  // corner lines: perpendicular between at-1 and at
+  const cornerAts = new Map(t.corners.map(c=>[c.at,c]));
+  for(const c of t.corners){
+    const a = Q[(c.at-1+Q.length)%Q.length], b = Q[c.at % Q.length];
+    const mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2;
+    let dx=b[0]-a[0], dy=b[1]-a[1]; const L=Math.hypot(dx,dy)||1; dx/=L; dy/=L;
+    const px=-dy, py=dx, half=34;
+    svg.appendChild(el("line",{x1:mx-px*half,y1:my-py*half,x2:mx+px*half,y2:my+py*half,
+      stroke:"#e3492b","stroke-width":5,"stroke-dasharray":"8 5"}));
+    svg.appendChild(el("text",{x:mx+px*(half+14),y:my+py*(half+14),fill:"#e3492b","font-size":"22",
+      "font-weight":"800","text-anchor":"middle","dominant-baseline":"middle",
+      "paint-order":"stroke",stroke:"#000","stroke-width":"4"}, "≤"+c.limit));
+  }
+
+  // points + labels
+  Q.forEach((p,i)=>{
+    const isCorner = cornerAts.has(i);
+    const isOut = outliers.has(i) || outliers.has((i-1+Q.length)%Q.length);
+    const grp = el("g",{class:"pt"+(i===selected?" selected":"")});
+    grp.dataset.i = i;
+    if(i===selected){
+      grp.appendChild(el("circle",{cx:p[0],cy:p[1],r:16,fill:"rgba(138,92,246,.25)",stroke:"#a985ff","stroke-width":3}));
+      grp.appendChild(el("circle",{cx:p[0],cy:p[1],r:30,fill:"transparent"}));  // fat grab pad for fingers
+    }
+    if(isOut){
+      grp.appendChild(el("rect",{x:p[0]-11,y:p[1]-11,width:22,height:22,fill:"none",stroke:"#d8c23a","stroke-width":3}));
+    }
+    grp.appendChild(el("circle",{cx:p[0],cy:p[1],r:7,
+      fill: i===0 ? "#3fa7d6" : isCorner ? "#e3492b" : "#f0e7d3", stroke:"#000","stroke-width":2}));
+    if(showIdx){
+      grp.appendChild(el("text",{x:p[0],y:p[1]-12,fill:isCorner?"#ffb199":"#fff","font-size":"17",
+        "font-weight":"800","text-anchor":"middle","paint-order":"stroke",stroke:"#000","stroke-width":"4"}, i));
+    }
+    svg.appendChild(grp);
+  });
+
+  report(t,Q,g,med,outliers);
+}
+
+/* =====================================================================
+   GRAVEL + TUNNELS — drawing
+   ===================================================================== */
+function featDefs(){
+  const d = el("defs",{});
+  const pat = el("pattern",{id:"gvl", width:9, height:9, patternUnits:"userSpaceOnUse"});
+  pat.appendChild(el("rect",{width:9, height:9, fill:"#c8a86b"}));
+  pat.appendChild(el("circle",{cx:2,   cy:2.4, r:1.2, fill:"#8a6f3c"}));
+  pat.appendChild(el("circle",{cx:6.6, cy:5,   r:1.4, fill:"#a98d55"}));
+  pat.appendChild(el("circle",{cx:4,   cy:7.6, r:1,   fill:"#7a6132"}));
+  pat.appendChild(el("circle",{cx:8,   cy:1.2, r:.8,  fill:"#7a6132"}));
+  d.appendChild(pat);
+  return d;
+}
+
+/* unit normal at space i, flipped so it points away from the middle of the lap */
+function spotNormal(Q, i, cx, cy){
+  const n = Q.length, a = Q[(i-1+n)%n], b = Q[(i+1)%n], p = Q[i];
+  let dx = b[0]-a[0], dy = b[1]-a[1];
+  const L = Math.hypot(dx,dy) || 1;
+  dx /= L; dy /= L;
+  let nx = dy, ny = -dx;
+  if((p[0]-cx)*nx + (p[1]-cy)*ny < 0){ nx = -nx; ny = -ny; }   // now +n = outwards
+  return [nx, ny];
+}
+/* the two Spots of a space: "in" hugs the Race Line, "out" sits wide */
+function spotXY(Q, i, side, cx, cy){
+  const [nx, ny] = spotNormal(Q, i, cx, cy);
+  const s = (side === "out" ? 1 : -1) * 12;
+  return [Q[i][0] + nx*s, Q[i][1] + ny*s];
+}
+
+function drawGravel(t, Q){
+  const g = t.gravel || emptyGravel();
+  if(!g.inner.length && !g.outer.length) return;
+  const [cx, cy] = centroid(Q), n = Q.length;
+  for(const [list, side] of [[g.inner,"in"], [g.outer,"out"]]){
+    for(const i of list){
+      if(i < 0 || i >= n) continue;
+      const [x,y] = spotXY(Q, i, side, cx, cy);
+      svg.appendChild(el("circle",{cx:x, cy:y, r:9.5, fill:"url(#gvl)",
+        stroke:"#5c4a26", "stroke-width":1.6}));
+    }
+  }
+}
+
+function drawTunnels(t, Q){
+  const runs = t.tunnels || [];
+  if(!runs.length) return;
+  const n = Q.length;
+  const mid = (a,b) => [(Q[a][0]+Q[b][0])/2, (Q[a][1]+Q[b][1])/2];
+
+  for(const r of runs){
+    const idx = [];
+    let i = r.from;
+    for(let k=0;k<n;k++){ idx.push(i); if(i === r.to) break; i = (i+1)%n; }
+
+    // the roof runs from the mouth before the first space to the mouth after the last
+    const pathPts = [mid((r.from-1+n)%n, r.from), ...idx.map(j=>Q[j]), mid(r.to, (r.to+1)%n)];
+    const d = "M " + pathPts.map(p=>p[0]+" "+p[1]).join(" L ");
+    svg.appendChild(el("path",{d, fill:"none", stroke:"#05040a", "stroke-width":54,
+      "stroke-linejoin":"round", opacity:.85}));
+    svg.appendChild(el("path",{d, fill:"none", stroke:"#9ad0f0", "stroke-width":54,
+      "stroke-linejoin":"round", opacity:.09}));
+    svg.appendChild(el("path",{d, fill:"none", stroke:"#9ad0f0", "stroke-width":2,
+      "stroke-dasharray":"11 9", opacity:.5}));
+
+    // portals at each mouth
+    for(const [a,b] of [[Q[(r.from-1+n)%n], Q[r.from]], [Q[r.to], Q[(r.to+1)%n]]]){
+      let dx = b[0]-a[0], dy = b[1]-a[1];
+      const L = Math.hypot(dx,dy) || 1;
+      dx /= L; dy /= L;
+      const mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2, px = -dy, py = dx, h = 28;
+      svg.appendChild(el("line",{x1:mx-px*h, y1:my-py*h, x2:mx+px*h, y2:my+py*h,
+        stroke:"#9ad0f0", "stroke-width":3.5, opacity:.9}));
+    }
+
+    // label, laid along the track at the middle of the run
+    const m = idx[Math.floor(idx.length/2)];
+    const a2 = Q[(m-1+n)%n], b2 = Q[(m+1)%n];
+    let ang = Math.atan2(b2[1]-a2[1], b2[0]-a2[0])*180/Math.PI;
+    if(ang > 90 || ang < -90) ang += 180;          // keep it the right way up
+    svg.appendChild(el("text",{x:Q[m][0], y:Q[m][1]+4, fill:"#bfe6f7", "font-size":"13",
+      "font-weight":"800", "text-anchor":"middle", "letter-spacing":"2.5",
+      transform:`rotate(${ang.toFixed(1)} ${Q[m][0]} ${Q[m][1]})`,
+      "paint-order":"stroke", stroke:"#000", "stroke-width":"3"}, "TUNNEL"));
+  }
+}
+
+/* dashed, draggable boxes for the board furniture the game paints */
+function drawFurniture(){
+  const B = BUILD;
+  const box = (kind,x,y,w,h,label,colour,rot)=>{
+    const g = el("g",{class:"hnd"}); g.dataset.h = kind;
+    if(rot) g.setAttribute("transform",`rotate(${rot} ${x+w/2} ${y+h/2})`);
+    g.appendChild(el("rect",{x,y,width:w,height:h,fill:"rgba(0,0,0,.35)",stroke:colour,
+      "stroke-width":2,"stroke-dasharray":"7 5",rx:6}));
+    g.appendChild(el("text",{x:x+w/2,y:y+h/2+4,fill:colour,"font-size":"15","font-weight":"800",
+      "text-anchor":"middle","letter-spacing":"1.5","paint-order":"stroke",stroke:"#000","stroke-width":"3"}, label));
+    svg.appendChild(g);
+  };
+  const pl = B.plate;
+  box("plate", pl.x, pl.y, pl.w, pl.h, (pl.sub||pl.title||"PLATE").toUpperCase(), "#e8d27a", pl.rot);
+  box("panel", B.panel.x-116, B.panel.y-59, 232, 118, "PANEL", "#9ad0f0");
+  box("podium", B.podium.x-70, B.podium.y-50, 140, 100, "PODIUM", "#cbb7ff");
+
+  const w = B.weatherTok;
+  const g = el("g",{class:"hnd"}); g.dataset.h = "weather";
+  g.appendChild(el("circle",{cx:w.x,cy:w.y,r:w.r,fill:"rgba(0,0,0,.35)",stroke:"#8ecf6a",
+    "stroke-width":2,"stroke-dasharray":"6 4"}));
+  g.appendChild(el("text",{x:w.x,y:w.y+5,fill:"#8ecf6a","font-size":"13","font-weight":"800",
+    "text-anchor":"middle","paint-order":"stroke",stroke:"#000","stroke-width":"3"}, "WX"));
+  svg.appendChild(g);
+}
+
+/* the marquees themselves: canopy + token seat, draggable, with a spin knob */
+function drawTents(t, editable){
+  const list = t.tents || [];
+  if(!list.length) return;
+  const Q = P(), bad = tentIssues();
+
+  list.forEach((tn,i)=>{
+    const rot = tn.rot || 0, rad = rot*Math.PI/180;
+
+    // dotted leader back to the corner line it belongs to
+    if(!bad[i]){
+      const b = boundary(Q, tn.at);
+      svg.appendChild(el("line",{x1:tn.x,y1:tn.y,x2:b.x,y2:b.y,stroke:"#efe8d6",
+        "stroke-width":1.6,"stroke-dasharray":"2 5",opacity:.55}));
+    }
+
+    const g = el("g", editable ? {class:"hnd"} : {});
+    if(editable) g.dataset.h = "tent:"+i;
+    g.setAttribute("transform", `translate(${tn.x},${tn.y})`);
+
+    const canopy = el("g",{transform:`rotate(${rot})`});
+    canopy.appendChild(el("rect",{x:-26,y:-19,width:52,height:38,rx:5,
+      fill:"rgba(236,228,207,.82)",stroke: bad[i] ? "#e3492b" : "#6f6248","stroke-width":2}));
+    for(let k=0;k<4;k++)
+      canopy.appendChild(el("rect",{x:-19.5+k*13,y:-19,width:6.5,height:38,fill:"rgba(214,203,172,.9)"}));
+    canopy.appendChild(el("line",{x1:-26,y1:0,x2:26,y2:0,stroke:"#c4b896","stroke-width":2}));
+    canopy.appendChild(el("line",{x1:-22,y1:-19,x2:-22,y2:-31,stroke:"#6f6248","stroke-width":1.4}));
+    canopy.appendChild(el("path",{d:"M-22 -31 L-12 -28.5 L-22 -26 Z",fill:"#c8402e"}));
+    g.appendChild(canopy);
+
+    // token seat + the corner it serves (both stay upright)
+    g.appendChild(el("circle",{cx:0,cy:0,r:13.5,fill:"rgba(111,98,72,.12)",
+      stroke:"#8d7f63","stroke-width":1.5,"stroke-dasharray":"3 3"}));
+    g.appendChild(el("text",{x:0,y:4.5,"font-size":"12","font-weight":"800","text-anchor":"middle",
+      fill: bad[i] ? "#e3492b" : "#241f28"}, tn.at));
+    svg.appendChild(g);
+
+    if(!editable) return;
+
+    // spin knob, 34px "above" the tent in its own rotated frame
+    const hx = tn.x + 34*Math.sin(rad), hy = tn.y - 34*Math.cos(rad);
+    const k = el("g",{class:"hnd"}); k.dataset.h = "tentrot:"+i;
+    k.appendChild(el("line",{x1:tn.x,y1:tn.y,x2:hx,y2:hy,stroke:"#a985ff","stroke-width":1.6,opacity:.8}));
+    k.appendChild(el("circle",{cx:hx,cy:hy,r:22,fill:"transparent"}));   // fat grab pad
+    k.appendChild(el("circle",{cx:hx,cy:hy,r:7,fill:"#2a2237",stroke:"#a985ff","stroke-width":2.5}));
+    k.appendChild(el("path",{d:"M0 -4 L3.6 2.5 L-3.6 2.5 Z",fill:"#a985ff",
+      transform:`translate(${hx},${hy}) rotate(${rot})`}));
+    svg.appendChild(k);
+  });
+}
+
+function report(t,Q,g,med,outliers){
+  const el2 = $("report");
+  const worst = [...g.keys()].sort((a,b)=>Math.abs(g[b]-med)-Math.abs(g[a]-med)).slice(0,5)
+    .map(i=>`${i}→${(i+1)%Q.length}: ${g[i].toFixed(0)}px`).join(" · ");
+  const painting_ = isBuild() && paintMode !== "off";
+  const sel = painting_
+    ? `<span style="color:#e0c48a"><b>Brush: ${(PAINTS.find(p=>p[0]===paintMode)||[,""])[1]}</b> — tap or sweep spaces on the board to paint them; tap a painted space again to lift it. Point dragging is parked until you set the brush back to <b>Off</b>.</span>`
+    : selected===null
+    ? `<span style="color:#b9ae95">No point selected — tap a point to select it, then drag it (or nudge with arrow keys, Shift = ×5). Tap empty track or press Esc to deselect.</span>`
+    : `<b style="color:#a985ff">Selected: space ${selected}</b> at [${Q[selected][0]}, ${Q[selected][1]}] — drag it to move, arrows to nudge, Esc to deselect.`;
+
+  const gr = t.gravel || emptyGravel(), tu = t.tunnels || [];
+  const feats = (gr.inner.length || gr.outer.length || tu.length)
+    ? `<br>Gravel — inner Spots: <b>${fmtSpaces(gr.inner, Q.length) || "—"}</b> · outer Spots: <b>${fmtSpaces(gr.outer, Q.length) || "—"}</b>. ` +
+      `Tunnels: <b>${fmtRuns(tu) || "—"}</b>${tu.length ? ` (${runsToSet(tu, Q.length).size} spaces)` : ""}.`
+    : `<br>No gravel or tunnels on this board.`;
+
+  let head = "";
+  if(isBuild()){
+    const problems = validate();
+    head = problems.length
+      ? `<span class="warn"><b style="color:#e3492b">Not ready to export:</b> ${problems.join(" · ")}</span><br>`
+      : `<span class="ok"><b style="color:#8ecf6a">Ready to export</b> — ${t.spaces} spaces, ${t.corners.length} corners, ${t.defaultLaps} lap${t.defaultLaps>1?"s":""}.</span><br>`;
+  }
+
+  el2.innerHTML = head + sel +
+    `<br><b>${t.name}</b> — ${Q.length} points, ${t.corners.length} corner lines · ` +
+    `median gap between consecutive spaces: <b>${med.toFixed(1)}px</b> · ` +
+    (outliers.size ? `<b>${outliers.size} spacing outlier${outliers.size>1?"s":""}</b> flagged (yellow squares) — these gaps differ most from the median: ${worst}`
+                   : `no spacing outliers — gaps look consistent. Largest deviations: ${worst}`) +
+    `<br>Corner lines sit <i>before</i> spaces ${t.corners.map(c=>c.at).join(", ")||"—"} (limits ${t.corners.map(c=>c.limit).join(", ")||"—"}).` +
+    feats;
+}
+
+function validate(){
+  const B = BUILD, out = [];
+  if(!/^[a-z][a-z0-9_]*$/.test(B.key)) out.push("key must be lowercase letters/numbers/underscore");
+  if(TRACKS[B.key]) out.push(`key “${B.key}” already belongs to ${TRACKS[B.key].name}`);
+  if(!B.name.trim()) out.push("name is empty");
+  if(!B.corners.length) out.push("add at least one corner");
+  if(B.spacePts.length !== B.spaces) out.push("space count out of sync");
+  const g = gaps(B.spacePts), med = median(g);
+  if(Math.min(...g) < med*0.35) out.push("two spaces are almost on top of each other");
+  const ats = new Set(B.corners.map(c=>c.at));
+  const orphan = B.tents.filter(t=>!ats.has(t.at)).map(t=>t.at);
+  if(orphan.length) out.push(`tent${orphan.length>1?"s":""} at space ${orphan.join(", ")} ${orphan.length>1?"have":"has"} no matching corner`);
+  const strayG = [...B.gravel.inner, ...B.gravel.outer].filter(i=>i < 0 || i >= B.spaces);
+  if(strayG.length) out.push(`gravel on space ${[...new Set(strayG)].join(", ")}, which is off the lap`);
+  const strayT = (B.tunnels||[]).filter(r=>r.from < 0 || r.from >= B.spaces || r.to < 0 || r.to >= B.spaces);
+  if(strayT.length) out.push("a tunnel runs off the end of the lap");
+  return out;
+}
+
+/* =====================================================================
+   POINTER: select-then-drag points, direct-drag furniture, move-all
+   ===================================================================== */
+let dragging = false, dragHandle = null, dragAll = null;
+
+/* ---------- the gravel / tunnel brush ---------- */
+const PAINTS = [["off","Off"],["gin","Gravel in"],["gout","Gravel out"],
+                ["gboth","Gravel both"],["tun","Tunnel"],["erase","Erase"]];
+let paintMode = "off";
+let painting = null;                 // {add, touched:Set} for the current sweep
+
+/* the space nearest the pointer, if it's close enough to have been aimed at */
+function nearestSpace(x, y){
+  const Q = P();
+  let best = -1, bd = 27*27;
+  Q.forEach((p,i)=>{
+    const d = (p[0]-x)*(p[0]-x) + (p[1]-y)*(p[1]-y);
+    if(d < bd){ bd = d; best = i; }
+  });
+  return best;
+}
+function hasGravel(i, side){
+  const g = BUILD.gravel;
+  if(side === "in")  return g.inner.includes(i);
+  if(side === "out") return g.outer.includes(i);
+  return g.inner.includes(i) && g.outer.includes(i);
+}
+function setGravel(i, side, on){
+  const flip = arr => {
+    const s = new Set(arr);
+    on ? s.add(i) : s.delete(i);
+    return [...s].sort((a,b)=>a-b);
+  };
+  if(side === "in"  || side === "both") BUILD.gravel.inner = flip(BUILD.gravel.inner);
+  if(side === "out" || side === "both") BUILD.gravel.outer = flip(BUILD.gravel.outer);
+}
+function setTunnel(i, on){
+  const n = BUILD.spaces, s = runsToSet(BUILD.tunnels, n);
+  on ? s.add(i) : s.delete(i);
+  BUILD.tunnels = mergeRuns(s, n);
+}
+/* is this space already "on" under the current brush? (drives toggle direction) */
+function paintState(i){
+  if(paintMode === "gin")   return hasGravel(i, "in");
+  if(paintMode === "gout")  return hasGravel(i, "out");
+  if(paintMode === "gboth") return hasGravel(i, "both");
+  if(paintMode === "tun")   return inTunnel(BUILD.tunnels, i, BUILD.spaces);
+  return true;                       // erase only ever takes away
+}
+function paintApply(i, on){
+  if(paintMode === "gin")        setGravel(i, "in",  on);
+  else if(paintMode === "gout")  setGravel(i, "out", on);
+  else if(paintMode === "gboth") setGravel(i, "both", on);
+  else if(paintMode === "tun")   setTunnel(i, on);
+  else if(paintMode === "erase"){ setGravel(i, "both", false); setTunnel(i, false); }
+}
+function paintSpace(i, on){
+  paintApply(i, on);
+  saveBuild();
+  syncFeatureFields();
+  draw();
+}
+
+function svgXY(e){
+  const r = svg.getBoundingClientRect(), t = T();
+  return [(e.clientX-r.left)/r.width*t.imgW, (e.clientY-r.top)/r.height*t.imgH];
+}
+
+/* what does this drag handle actually move? */
+function handleObj(kind){
+  if(kind === "plate")   return BUILD.plate;
+  if(kind === "weather") return BUILD.weatherTok;
+  if(kind.startsWith("tent:"))    return BUILD.tents[+kind.slice(5)];
+  if(kind.startsWith("tentrot:")) return BUILD.tents[+kind.slice(8)];
+  return BUILD[kind];
+}
+
+/* ---- touch bookkeeping -------------------------------------------------
+   One finger on the board is ours (select / drag / paint). The moment a
+   second finger lands it's a pinch-or-pan gesture, so we bail out of any
+   drag in progress and hand the whole thing back to the browser.        */
+const touches = new Map();                    // pointerId → last client x/y
+const gesture = ()=> touches.size > 1;
+let pan = null;                               // running two-finger pan state
+
+svg.addEventListener("pointerdown", e=>{
+  if(e.pointerType === "touch"){
+    touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(gesture()){                 // 2nd finger down → this is scroll/zoom, not a drag
+      endDrag();
+      pan = null;
+      return;
+    }
+  }
+
+  // brush wins over everything while it's loaded
+  if(isBuild() && paintMode !== "off"){
+    const [x,y] = svgXY(e);
+    const i = nearestSpace(x,y);
+    if(i < 0) return;                        // tapped empty tarmac — let pinch/pan through
+    const on = !paintState(i);
+    painting = {add:on, touched:new Set([i])};
+    paintSpace(i, on);
+    e.preventDefault(); svg.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  const moveAll = isBuild() && $("cbmove").checked;
+
+  const h = isBuild() && e.target.closest(".hnd");
+  if(h && !moveAll){
+    const kind = h.dataset.h, [x,y] = svgXY(e);
+    const o = handleObj(kind);
+    if(!o) return;
+    dragHandle = {kind, dx:o.x-x, dy:o.y-y, spin:kind.startsWith("tentrot:")};
+    e.preventDefault(); svg.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  if(moveAll){
+    dragAll = {last: svgXY(e)};
+    e.preventDefault(); svg.setPointerCapture(e.pointerId);
+    return;
+  }
+
+  const g = e.target.closest(".pt");
+  if(!g){                               // tapped empty track → deselect
+    if(selected!==null){ selected=null; draw(); }
+    return;                             // no capture: pinch-zoom / pan work normally
+  }
+  const i = +g.dataset.i;
+  if(i!==selected){                     // first tap = select only, never drags
+    selected = i; draw();
+    return;
+  }
+  dragging = true;                      // tapped the already-selected point → drag it
+  e.preventDefault();
+  svg.setPointerCapture(e.pointerId);
+});
+
+/* two fingers = scroll the page. The browser already does this when you've
+   pinched in (visual viewport), so we only step in at scale 1, where a
+   touch-action lock would otherwise leave you stuck. */
+function twoFingerScroll(){
+  const [a,b] = [...touches.values()];
+  const mid  = {x:(a.x+b.x)/2, y:(a.y+b.y)/2};
+  const span = Math.hypot(a.x-b.x, a.y-b.y);
+  const zoomed = window.visualViewport && window.visualViewport.scale > 1.02;
+  if(pan && !zoomed && Math.abs(span - pan.span) < 10){   // steady spread → a pan, not a pinch
+    window.scrollBy(pan.mid.x - mid.x, pan.mid.y - mid.y);
+  }
+  pan = {mid, span};
+}
+
+svg.addEventListener("pointermove", e=>{
+  if(e.pointerType === "touch" && touches.has(e.pointerId)){
+    touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(gesture()){ twoFingerScroll(); return; }   // hands off — this gesture is scrolling
+  }
+  if(gesture()) return;
+  if(painting){
+    e.preventDefault();
+    const [x,y] = svgXY(e);
+    const i = nearestSpace(x,y);
+    if(i >= 0 && !painting.touched.has(i)){    // each space gets painted once per sweep
+      painting.touched.add(i);
+      paintSpace(i, painting.add);
+    }
+    return;
+  }
+  if(dragHandle){
+    e.preventDefault();
+    const [x,y] = svgXY(e), o = handleObj(dragHandle.kind);
+    if(!o) return;
+    if(dragHandle.spin){
+      const a = Math.atan2(y-o.y, x-o.x)*180/Math.PI + 90;   // knob points "up" at rot 0
+      o.rot = Math.round((a % 360 + 360) % 360);
+      renderTents();
+    }else{
+      o.x = Math.round(x+dragHandle.dx); o.y = Math.round(y+dragHandle.dy);
+      if(dragHandle.kind.startsWith("tent:")) renderTents(); else syncFormPositions();
+    }
+    saveBuild(); draw();
+    return;
+  }
+  if(dragAll){
+    e.preventDefault();
+    const [x,y] = svgXY(e), dx = x-dragAll.last[0], dy = y-dragAll.last[1];
+    dragAll.last = [x,y];
+    transformAll(p=>[Math.round(p[0]+dx), Math.round(p[1]+dy)]);
+    saveBuild(); renderTents(); draw();
+    return;
+  }
+  if(!dragging || selected===null) return;
+  e.preventDefault();
+  const [x,y] = svgXY(e);
+  P()[selected] = [Math.round(x), Math.round(y)];
+  if(isBuild()) saveBuild();
+  draw();
+});
+
+function endDrag(){ dragging=false; dragHandle=null; dragAll=null; painting=null; }
+function liftFinger(e){
+  if(e.pointerType === "touch"){
+    touches.delete(e.pointerId);
+    if(touches.size < 2) pan = null;
+  }
+  endDrag();
+}
+svg.addEventListener("pointerup", liftFinger);
+svg.addEventListener("pointercancel", liftFinger);
+svg.addEventListener("lostpointercapture", liftFinger);
+
+document.addEventListener("keydown", e=>{
+  if(/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  const step = e.shiftKey?5:1;
+  if(selected===null){
+    if(!isBuild() || !e.key.startsWith("Arrow")) return;
+    const d = {ArrowLeft:[-step,0],ArrowRight:[step,0],ArrowUp:[0,-step],ArrowDown:[0,step]}[e.key];
+    if(!d) return;
+    transformAll(p=>[p[0]+d[0], p[1]+d[1]]);   // nothing selected in builder → nudge the whole lap
+    saveBuild(); renderTents(); draw(); e.preventDefault();
+    return;
+  }
+  const p = P()[selected];
+  if(e.key==="Escape"){ selected=null; draw(); }
+  else if(e.key==="ArrowLeft"){ p[0]-=step; after(); e.preventDefault(); }
+  else if(e.key==="ArrowRight"){ p[0]+=step; after(); e.preventDefault(); }
+  else if(e.key==="ArrowUp"){ p[1]-=step; after(); e.preventDefault(); }
+  else if(e.key==="ArrowDown"){ p[1]+=step; after(); e.preventDefault(); }
+  function after(){ if(isBuild()) saveBuild(); draw(); }
+});
+
+/* =====================================================================
+   TABS + CONTROLS
+   ===================================================================== */
+const tabs = $("tabs");
+const BUILTIN = new Set(Object.keys(TRACKS));
+
+function makeTab(k, label, cls){
+  const b = document.createElement("button");
+  b.textContent = label; b.dataset.k = k;
+  if(cls) b.classList.add(cls);
+  if(k===cur) b.classList.add("sel");
+  b.onclick = ()=>{
+    cur = k; selected = null;
+    [...tabs.children].forEach(x=>x.classList.toggle("sel", x.dataset.k===k));
+    $("exportbox").style.display = "none";
+    setMode();
+    syncBGField();
+    draw();
+  };
+  tabs.appendChild(b);
+}
+function rebuildTabs(){
+  tabs.innerHTML = "";
+  if(cur !== BKEY && !TRACKS[cur]) cur = Object.keys(TRACKS)[0];
+  for(const k in TRACKS) makeTab(k, TRACKS[k].name + (BUILTIN.has(k) ? "" : " ↓"));
+  makeTab(BKEY, "＋ Build a track", "build");
+}
+
+function setMode(){
+  const b = isBuild();
+  if(!b) paintMode = "off";        // the brush only makes sense on the track you're building
+  renderPaints();
+  $("builder").classList.toggle("on", b);
+  $("lbl_move").style.display = b ? "flex" : "none";
+  $("lbl_img").style.display  = "flex";
+  $("btnexport").style.display = b ? "none" : "inline-block";
+  $("btnreset").style.display  = b ? "none" : "inline-block";
+  if(b) syncForm();
+}
+
+for(const id of ["cbimg","cbribbon","cbidx","cbgap","cbfeat"]) $(id).onchange = draw;
+$("cbmove").onchange = ()=>{
+  if($("cbmove").checked){ selected = null; if(paintMode !== "off"){ setPaint("off"); return; } }
+  draw();
+};
+$("btnreset").onclick = ()=>{ pts[cur]=TRACKS[cur].spacePts.map(p=>[p[0],p[1]]); draw(); };
+$("btnexport").onclick = ()=>{
+  const box = $("exportbox");
+  box.value = "spacePts:["+P().map(p=>"["+p[0]+","+p[1]+"]").join(",")+"]";
+  box.style.display = "block"; box.select();
+  try{ document.execCommand("copy"); }catch(err){}
+};
+
+/* =====================================================================
+   BUILDER FORM
+   ===================================================================== */
+const TEXT_FIELDS = {b_name:"name", b_key:"key", b_subtitle:"subtitle", b_eyebrow:"eyebrow", b_tagline:"tagline"};
+const NUM_FIELDS  = {b_laps:"defaultLaps", b_heat:"heat", b_stress:"stress", b_legends:"legendsLine"};
+
+function syncForm(){
+  const B = BUILD;
+  for(const id in TEXT_FIELDS) $(id).value = B[TEXT_FIELDS[id]];
+  for(const id in NUM_FIELDS)  $(id).value = B[NUM_FIELDS[id]];
+  $("b_terrain").value = B.terrain;
+  $("b_shape").value   = B.shape;
+  $("b_spaces").value  = B.spaces;
+  $("b_ptitle").value  = B.plate.title;
+  $("b_psub").value    = B.plate.sub;
+  $("b_plw").value     = B.plate.w;
+  $("b_plh").value     = B.plate.h;
+  $("b_plrot").value   = B.plate.rot;
+  $("b_pcol1").value   = B.plate.titleColor;
+  $("b_pcol2").value   = B.plate.subColor;
+  $("b_wr").value      = B.weatherTok.r;
+  syncFormPositions();
+  renderCorners();
+  renderTents();
+  syncFeatureFields();
+  renderPaints();
+}
+function syncFormPositions(){
+  const B = BUILD;
+  $("b_wx").value = B.weatherTok.x;  $("b_wy").value = B.weatherTok.y;
+  $("b_px").value = B.panel.x;       $("b_py").value = B.panel.y;
+  $("b_dx").value = B.podium.x;      $("b_dy").value = B.podium.y;
+  $("b_plx").value = B.plate.x;      $("b_ply").value = B.plate.y;
+}
+
+function renderCorners(){
+  const list = $("cornerlist");
+  list.innerHTML = "";
+  BUILD.corners.forEach((c,i)=>{
+    const row = document.createElement("div");
+    row.className = "crow";
+    row.innerHTML =
+      `<span class="cn">${i+1}</span>
+       <input type="number" min="1" max="${BUILD.spaces-1}" step="1" value="${c.at}" data-c="${i}" data-f="at">
+       <input type="number" min="1" max="20" step="1" value="${c.limit}" data-c="${i}" data-f="limit">
+       <input type="text" placeholder="Turn ${i+1}" value="${(c.name||"").replace(/"/g,"&quot;")}" data-c="${i}" data-f="name">
+       <button class="del" data-del="${i}" title="Remove corner">✕</button>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll("input").forEach(inp=>{
+    inp.onchange = ()=>{
+      const c = BUILD.corners[+inp.dataset.c], f = inp.dataset.f;
+      if(f==="name") c.name = inp.value;
+      else if(f==="at"){
+        const to = Math.max(1, Math.min(BUILD.spaces-1, parseInt(inp.value,10) || 1));
+        const me = +inp.dataset.c;
+        remapCorners(BUILD.corners.map((cc,j)=> j === me ? to : cc.at));   // marquee moves with it
+      }
+      else c[f] = parseInt(inp.value,10) || 1;
+      dedupeCorners(); saveBuild(); renderCorners(); renderTents(); draw();
+    };
+  });
+  list.querySelectorAll(".del").forEach(b=>{
+    b.onclick = ()=>{
+      const [gone] = BUILD.corners.splice(+b.dataset.del, 1);
+      BUILD.tents = BUILD.tents.filter(t=>t.at !== gone.at);        // and its marquee goes with it
+      saveBuild(); renderCorners(); renderTents(); draw();
+    };
+  });
+}
+
+function renderTents(){
+  const list = $("tentlist");
+  const ats = new Set(BUILD.corners.map(c=>c.at));
+  list.innerHTML = "";
+  if(!BUILD.tents.length){
+    list.innerHTML = `<div class="hint" style="margin:0">No tents yet — “Auto-place all” drops one on the outside of every corner, then drag them into place.</div>`;
+    return;
+  }
+  BUILD.tents.forEach((t,i)=>{
+    const row = document.createElement("div");
+    row.className = "tentrow";
+    const bad = ats.has(t.at) ? "" : " class=\"bad\"";
+    row.innerHTML =
+      `<span class="cn" style="font-size:10px;color:#7e7490;text-align:right">${i+1}</span>
+       <input type="number" min="1" max="${BUILD.spaces-1}" step="1" value="${t.at}" data-t="${i}" data-f="at"${bad}>
+       <input type="number" step="1" value="${t.x}" data-t="${i}" data-f="x">
+       <input type="number" step="1" value="${t.y}" data-t="${i}" data-f="y">
+       <input type="number" step="5" value="${t.rot||0}" data-t="${i}" data-f="rot">
+       <button class="del" data-delt="${i}" title="Remove tent">✕</button>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll("input").forEach(inp=>{
+    inp.onchange = ()=>{
+      const t = BUILD.tents[+inp.dataset.t];
+      t[inp.dataset.f] = parseInt(inp.value,10) || 0;
+      BUILD.tents.sort((a,b)=>a.at-b.at);
+      saveBuild(); renderTents(); draw();
+    };
+  });
+  list.querySelectorAll(".del").forEach(b=>{
+    b.onclick = ()=>{ BUILD.tents.splice(+b.dataset.delt,1); saveBuild(); renderTents(); draw(); };
+  });
+}
+$("b_autotent").onclick  = ()=>{ autoTents(); saveBuild(); renderTents(); draw(); };
+$("b_cleartent").onclick = ()=>{ BUILD.tents = []; saveBuild(); renderTents(); draw(); };
+
+/* ---------- gravel & tunnels ---------- */
+function renderPaints(){
+  const box = $("paintmodes");
+  if(!box) return;
+  box.innerHTML = "";
+  for(const [m, label] of PAINTS){
+    const b = document.createElement("button");
+    b.className = "pbtn" + (m === paintMode ? " sel" : "");
+    b.dataset.m = m;
+    b.textContent = label;
+    b.onclick = ()=> setPaint(m);
+    box.appendChild(b);
+  }
+}
+function setPaint(m){
+  paintMode = m;
+  if(m !== "off"){
+    selected = null;                                   // no point dragging while a brush is loaded
+    if($("cbmove").checked) $("cbmove").checked = false;
+  }
+  renderPaints();
+  draw();
+}
+function syncFeatureFields(){
+  const n = BUILD.spaces;
+  $("b_gin").value  = fmtSpaces(BUILD.gravel.inner, n);
+  $("b_gout").value = fmtSpaces(BUILD.gravel.outer, n);
+  $("b_tun").value  = fmtRuns(BUILD.tunnels);
+}
+$("b_gin").onchange = ()=>{
+  BUILD.gravel.inner = [...parseSpaceList($("b_gin").value, BUILD.spaces)].sort((a,b)=>a-b);
+  saveBuild(); syncFeatureFields(); draw();
+};
+$("b_gout").onchange = ()=>{
+  BUILD.gravel.outer = [...parseSpaceList($("b_gout").value, BUILD.spaces)].sort((a,b)=>a-b);
+  saveBuild(); syncFeatureFields(); draw();
+};
+$("b_tun").onchange = ()=>{
+  BUILD.tunnels = mergeRuns(parseSpaceList($("b_tun").value, BUILD.spaces), BUILD.spaces);
+  saveBuild(); syncFeatureFields(); draw();
+};
+$("b_cleargravel").onclick = ()=>{ BUILD.gravel = emptyGravel(); saveBuild(); syncFeatureFields(); draw(); };
+$("b_cleartun").onclick    = ()=>{ BUILD.tunnels = [];           saveBuild(); syncFeatureFields(); draw(); };
+
+for(const id in TEXT_FIELDS) $(id).oninput = ()=>{ BUILD[TEXT_FIELDS[id]] = $(id).value; saveBuild(); draw(); };
+for(const id in NUM_FIELDS)  $(id).onchange = ()=>{ BUILD[NUM_FIELDS[id]] = parseInt($(id).value,10)||1; saveBuild(); draw(); };
+$("b_terrain").onchange = ()=>{ BUILD.terrain = $("b_terrain").value; saveBuild(); };
+$("b_shape").onchange = ()=>{
+  BUILD.shape = $("b_shape").value;
+  BUILD.spacePts = shapePoints(BUILD.shape, BUILD.spaces);
+  saveBuild(); draw();
+};
+$("b_spaces").onchange = ()=>{ setSpaces(parseInt($("b_spaces").value,10)); $("b_spaces").value = BUILD.spaces; saveBuild(); renderCorners(); renderTents(); syncFeatureFields(); draw(); };
+$("b_reshape").onclick = ()=>{ BUILD.spacePts = shapePoints(BUILD.shape, BUILD.spaces); saveBuild(); draw(); };
+$("b_even").onclick    = ()=>{ BUILD.spacePts = resample(BUILD.spacePts, BUILD.spaces); saveBuild(); draw(); };
+$("b_smooth").onclick  = ()=>{ smoothAll(); saveBuild(); draw(); };
+$("b_addcorner").onclick = ()=>{
+  const used = new Set(BUILD.corners.map(c=>c.at));
+  let at = 1; while(used.has(at) && at < BUILD.spaces-1) at++;
+  BUILD.corners.push({at, limit:3, name:""});
+  dedupeCorners(); saveBuild(); renderCorners(); draw();
+};
+$("b_spacecorners").onclick = ()=>{
+  const k = BUILD.corners.length; if(!k) return;
+  remapCorners(BUILD.corners.map((c,i)=> Math.max(1, Math.round((i+0.5)*BUILD.spaces/k))));
+  dedupeCorners(); saveBuild(); renderCorners(); renderTents(); draw();
+};
+
+for(const [id, apply] of [
+  ["b_wx", v=>BUILD.weatherTok.x=v], ["b_wy", v=>BUILD.weatherTok.y=v], ["b_wr", v=>BUILD.weatherTok.r=v],
+  ["b_px", v=>BUILD.panel.x=v],      ["b_py", v=>BUILD.panel.y=v],
+  ["b_dx", v=>BUILD.podium.x=v],     ["b_dy", v=>BUILD.podium.y=v],
+  ["b_plx",v=>BUILD.plate.x=v],      ["b_ply",v=>BUILD.plate.y=v],
+  ["b_plw",v=>BUILD.plate.w=v],      ["b_plh",v=>BUILD.plate.h=v], ["b_plrot",v=>BUILD.plate.rot=v]
+]) $(id).onchange = ()=>{ apply(parseInt($(id).value,10)||0); saveBuild(); draw(); };
+
+$("b_ptitle").oninput = ()=>{ BUILD.plate.title = $("b_ptitle").value; saveBuild(); draw(); };
+$("b_psub").oninput   = ()=>{ BUILD.plate.sub   = $("b_psub").value;   saveBuild(); draw(); };
+$("b_pcol1").oninput  = ()=>{ BUILD.plate.titleColor = $("b_pcol1").value; saveBuild(); };
+$("b_pcol2").oninput  = ()=>{ BUILD.plate.subColor   = $("b_pcol2").value; saveBuild(); };
+
+/* the whole-track moves take the tents with them, so the tent list has to be re-read */
+$("b_rotL").onclick   = ()=>{ rotateAll(-5); saveBuild(); renderTents(); draw(); };
+$("b_rotR").onclick   = ()=>{ rotateAll(5);  saveBuild(); renderTents(); draw(); };
+$("b_shrink").onclick = ()=>{ scaleAll(0.95); saveBuild(); renderTents(); draw(); };
+$("b_grow").onclick   = ()=>{ scaleAll(1.05); saveBuild(); renderTents(); draw(); };
+$("b_centre").onclick = ()=>{ centreAll(); saveBuild(); renderTents(); draw(); };
+$("b_flip").onclick   = ()=>{ reverseAll(); saveBuild(); renderCorners(); renderTents(); syncFeatureFields(); draw(); };
+$("b_new").onclick    = ()=>{
+  if(!confirm("Start over? This clears the circuit you’re building.")) return;
+  BUILD = freshBuild(); saveBuild(); syncForm(); draw();
+};
+
+// seed the "start from" picker with the boards we already have
+const clone = $("b_clone");
+function refreshClone(){
+  const keep = clone.value;
+  clone.innerHTML = `<option value="">Blank template</option>` +
+    Object.keys(TRACKS).map(k=>`<option value="${k}">${TRACKS[k].name}</option>`).join("");
+  if(keep && TRACKS[keep]) clone.value = keep;
+}
+$("b_cloneGo").onclick = ()=>{
+  const k = clone.value;
+  if(!k){ BUILD = freshBuild(); }
+  else{
+    const s = TRACKS[k];
+    const cp = o => o ? JSON.parse(JSON.stringify(o)) : null;
+    BUILD = Object.assign(freshBuild(), {
+      key: s.key+"_v2", name: (s.name||"")+" (edit)",
+      spaces: pts[k].length,
+      spacePts: pts[k].map(p=>[p[0],p[1]]),   // whatever you've nudged in checker mode
+      corners: (s.corners||[]).map(c=>({at:c.at, limit:c.limit, name:c.name||""})),
+      tents:   (s.tents||[]).map(t=>({at:t.at, x:t.x, y:t.y, rot:t.rot||0})),
+      gravel:  normGravel(s.gravel, pts[k].length),
+      tunnels: normTunnels(s.tunnels, pts[k].length)
+    });
+    // everything else the game reads, carried across when the source has it
+    for(const f of ["defaultLaps","heat","stress","legendsLine","terrain","eyebrow",
+                    "subtitle","tagline","image","imgW","imgH"])
+      if(s[f] !== undefined && s[f] !== "") BUILD[f] = s[f];
+    if(s.plate)      BUILD.plate      = Object.assign(cp(BUILD.plate), cp(s.plate));
+    if(s.panel)      BUILD.panel      = cp(s.panel);
+    if(s.podium)     BUILD.podium     = cp(s.podium);
+    if(s.weatherTok) BUILD.weatherTok = cp(s.weatherTok);
+    if(!s.plate) BUILD.plate.sub = (s.name||"").toUpperCase();
+    if(s.image) setBG(BKEY, s.image);
+  }
+  saveBuild(); syncForm(); syncBGField(); draw();
+};
+
+/* ---------- export: a paste-in block for index_20.html ---------- */
+function constName(){ return "TRACK_" + BUILD.key.toUpperCase().replace(/[^A-Z0-9]/g,"_"); }
+
+function exportCode(){
+  const B = BUILD, C = constName(), q = s => JSON.stringify(String(s));
+  const corners = B.corners.map(c =>
+    "{at:"+c.at+", limit:"+c.limit+(c.name?", name:"+q(c.name):"")+"}").join(", ");
+  const spacePts = B.spacePts.map(p=>"["+p[0]+","+p[1]+"]").join(",");
+  const tents = B.tents.map(t=>"{at:"+t.at+", x:"+t.x+", y:"+t.y+", rot:"+(t.rot||0)+"}").join(", ");
+  const tunnels = B.tunnels.map(r=>"{from:"+r.from+", to:"+r.to+"}").join(", ");
+  const pl = B.plate;
+
+  return [
+"/* ===== " + B.name + " — built with the REVUP track builder =====",
+"   Paste this whole block into index_20.html at the very END of the file,",
+"   on the line just above the last closing script tag. Nothing else to change:",
+"   it registers itself in TRACKS and adds its own card to the track picker. */",
+"const " + C + " = {",
+"  key:" + q(B.key) + ",",
+"  name:" + q(B.name) + ", spaces:" + B.spaces + ", defaultLaps:" + B.defaultLaps + ", heat:" + B.heat + ", stress:" + B.stress + ",",
+"  image:" + q(B.image||"") + ", imgW:" + B.imgW + ", imgH:" + B.imgH + ",",
+"  eyebrow:" + q(B.eyebrow) + ",",
+"  subtitle:" + q(B.subtitle) + ",",
+"  tagline:" + q(B.tagline) + ",",
+"  terrain:" + q(B.terrain) + ",",
+"  plate:{ x:" + pl.x + ", y:" + pl.y + ", w:" + pl.w + ", h:" + pl.h + ", rot:" + pl.rot + ", title:" + q(pl.title) + ", sub:" + q(pl.sub) + ",",
+"          titleColor:" + q(pl.titleColor) + ", subColor:" + q(pl.subColor) + " },",
+"  panel:{x:" + B.panel.x + ",y:" + B.panel.y + "}, podium:{x:" + B.podium.x + ",y:" + B.podium.y + "},",
+"  weatherTok:{x:" + B.weatherTok.x + ",y:" + B.weatherTok.y + ",r:" + B.weatherTok.r + "},",
+"  corners:[ " + corners + " ],",
+"  tents:[ " + tents + " ],",
+"",
+"  /* Gravel — space indices whose inner (Race Line) Spot and/or outer Spot is gravel.",
+"     A space in both lists has gravel right across it. Rule: at the end of your turn",
+"     (step 9), if your car is on a gravel Spot you must pay 1 Heat if you have any in",
+"     the Engine; if the Engine is empty, ignore it. */",
+"  gravel:{ inner:[" + B.gravel.inner.join(",") + "], outer:[" + B.gravel.outer.join(",") + "] },",
+"",
+"  /* Tunnels — inclusive runs of Spaces (from > to means the run wraps past space 0).",
+"     Rule: while a car is on a tunnel Space its player cannot discard from hand, and",
+"     this beats any Event / Upgrade / Road Condition that would otherwise let them.",
+"     Cooling down (card goes to the Engine) and Scrap (card comes off the top of the",
+"     draw deck) are not discards, so both are still allowed inside a tunnel. */",
+"  tunnels:[ " + tunnels + " ],",
+"",
+"  legendsLine:" + B.legendsLine + ",",
+"  spacePts:[" + spacePts + "]",
+"};",
+"",
+"/* register it + slot a card into the track picker */",
+"TRACKS[" + q(B.key) + "] = " + C + ";",
+"(function(){",
+"  const _showTrackSelect = showTrackSelect;",
+"  showTrackSelect = function(){",
+"    _showTrackSelect.apply(this, arguments);",
+"    const list = document.querySelector('#setup .tracklist');",
+"    if(!list || list.querySelector('[data-key=\"" + B.key + "\"]')) return;",
+"    const t = " + C + ";",
+"    const b = document.createElement('button');",
+"    b.className = 'trackcard'; b.dataset.key = t.key;",
+"    b.innerHTML = '<div class=\"tc-art\">' + trackThumb(t) + '</div>' +",
+"      '<div class=\"tc-body\"><div class=\"tc-name\">' + t.name + '</div>' +",
+"      '<div class=\"tc-meta\">' + t.spaces + ' spaces · ' + t.corners.length + ' corners · ' + t.subtitle + '</div></div>' +",
+"      '<div class=\"tc-go\">Race \\u25B8</div>';",
+"    b.onclick = () => { selectTrack(t.key); G.hotseat ? showHotseatSetup() : showSetup(); };",
+"    list.appendChild(b);",
+"  };",
+"})();"
+  ].join("\n");
+}
+
+$("b_export").onclick = ()=>{
+  const problems = validate();
+  const box = $("exportbox");
+  box.value = (problems.length ? "/*  Fix first: " + problems.join(" · ") + "  */\n\n" : "") + exportCode();
+  box.style.display = "block";
+  box.select();
+  try{ document.execCommand("copy"); }catch(err){}
+  if(box.scrollIntoView) box.scrollIntoView({behavior:"smooth", block:"nearest"});
+};
+
+/* ---------- autosave (survives a refresh; harmless if storage is blocked) ---------- */
+function saveBuild(){
+  try{ localStorage.setItem("revup_builder", JSON.stringify(BUILD)); }catch(err){}
+}
+function loadBuild(){
+  try{
+    const raw = localStorage.getItem("revup_builder");
+    if(!raw) return null;
+    const b = JSON.parse(raw);
+    if(!b || !Array.isArray(b.spacePts) || !b.spacePts.length) return null;
+    b.spaces = b.spacePts.length;
+    b.tents = Array.isArray(b.tents) ? b.tents : [];
+    b.image = b.image || "";
+    b.gravel = normGravel(b.gravel, b.spaces);
+    b.tunnels = normTunnels(b.tunnels, b.spaces);
+    return b;
+  }catch(err){ return null; }
+}
+
+/* =====================================================================
+   BOARD IMAGE — point an <image> at a path relative to this file.
+   Nothing is embedded: keep the html and the tracks/ folder together
+   (in the repo, on Pages, or in the same folder on disk) and it resolves.
+   ===================================================================== */
+function bgStat(msg, cls){
+  const e = $("bgstat");
+  e.innerHTML = msg;
+  e.className = "stat" + (cls ? " "+cls : "");
+}
+function setBG(key, path, href){
+  if(!path && !href){ delete BG[key]; bgStat("No board image for this track.", ""); draw(); return; }
+  const rec = BG[key] = {path: path||"", href: href||path, ok:null};
+  const probe = new Image();
+  probe.onload = ()=>{
+    rec.ok = true; rec.w = probe.naturalWidth; rec.h = probe.naturalHeight;
+    if(isBuild() && rec.path) BUILD.image = rec.path;
+    if(key !== BKEY && TRACKS[key] && rec.path) TRACKS[key].image = rec.path;
+    const odd = (rec.w !== BW || rec.h !== BH)
+      ? ` — heads up, it's <b>${rec.w}×${rec.h}</b>, not 1200×800, so it'll be stretched to fit the board`
+      : ` — ${rec.w}×${rec.h}, spot on`;
+    bgStat(`Loaded <b>${rec.path || "local file"}</b>${odd}.`, "good");
+    saveBuild(); draw();
+  };
+  probe.onerror = ()=>{
+    rec.ok = false;
+    bgStat(`Couldn't load <b>${rec.path}</b>. The path is relative to this html file — check that <b>tracks/</b> sits next to it. To trace right now, use <b>Choose file…</b> (preview only, not saved into the track).`, "bad");
+    draw();
+  };
+  probe.src = rec.href;
+}
+function syncBGField(){
+  const rec = BG[cur];
+  const path = rec ? rec.path : (isBuild() ? (BUILD.image||"") : ((TRACKS[cur]||{}).image || ""));
+  $("bgpath").value = path;
+  if(rec && rec.ok) bgStat(`Showing <b>${rec.path || "local file"}</b>.`, "good");
+  else if(path && (!rec || rec.ok === null)) setBG(cur, path);   // try it once, quietly
+  else if(!path) bgStat("Type a path relative to this file (e.g. <b>tracks/Pukekohe.jpeg</b>) and hit Import — nothing gets baked into the html.", "");
+}
+$("bgload").onclick  = ()=>{ const v = $("bgpath").value.trim(); setBG(cur, v); };
+$("bgpath").onkeydown = e =>{ if(e.key === "Enter") $("bgload").click(); };
+$("bgpick").onclick  = ()=> $("bgfile").click();
+$("bgfile").onchange = e =>{
+  const f = e.target.files[0]; if(!f) return;
+  setBG(cur, $("bgpath").value.trim(), URL.createObjectURL(f));
+  bgStat(`Previewing <b>${f.name}</b> from disk. The <i>path</i> box is what gets exported — set it to where the file will live in the repo (e.g. <b>tracks/${f.name}</b>).`, "");
+  e.target.value = "";
+};
+$("bgop").oninput = draw;
+
+/* =====================================================================
+   REVUP IMPORT
+   ===================================================================== */
+function revStat(msg, cls){
+  const e = $("revstat");
+  e.innerHTML = msg;
+  e.className = "stat" + (cls ? " "+cls : "");
+}
+$("revpick").onclick  = ()=> $("revfile").click();
+$("revfile").onchange = e =>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{ mergeTracks(extractTracks(String(r.result)), `<b>${f.name}</b>`); };
+  r.onerror = ()=> revStat(`Couldn't read <b>${f.name}</b>.`, "bad");
+  r.readAsText(f);
+  e.target.value = "";
+};
+$("revfetch").onclick = ()=>{
+  const url = $("revurl").value.trim();
+  if(!url){ revStat("Give me a path or URL first — or use the file picker.", "bad"); return; }
+  revStat(`Fetching <b>${url}</b>…`, "");
+  fetch(url)
+    .then(r => r.ok ? r.text() : Promise.reject(new Error("HTTP "+r.status)))
+    .then(txt => mergeTracks(extractTracks(txt), `<b>${url}</b>`))
+    .catch(err => revStat(`Fetch failed (${err.message}). Opening this file straight off the disk blocks fetch — use <b>Choose index_20.html…</b> instead, or serve the folder over http.`, "bad"));
+};
+$("revurl").onkeydown = e =>{ if(e.key === "Enter") $("revfetch").click(); };
+$("revforget").onclick = ()=>{
+  if(!confirm("Drop every imported track? The five built-ins stay put.")) return;
+  for(const k in TRACKS) if(!BUILTIN.has(k)){ delete TRACKS[k]; delete pts[k]; delete BG[k]; }
+  try{ localStorage.removeItem("revup_imported"); }catch(err){}
+  if(!TRACKS[cur] && cur !== BKEY) cur = Object.keys(TRACKS)[0];
+  rebuildTabs(); refreshClone(); setMode(); syncBGField(); draw();
+  revStat("Imported tracks dropped — back to the built-ins.", "");
+};
+
+/* ---------- boot ---------- */
+for(const k in TRACKS){                       // built-ins ship without features — give them empties
+  const n = TRACKS[k].spaces || TRACKS[k].spacePts.length;
+  TRACKS[k].gravel  = normGravel(TRACKS[k].gravel, n);
+  TRACKS[k].tunnels = normTunnels(TRACKS[k].tunnels, n);
+}
+loadImported();
+rebuildTabs();
+refreshClone();
+setMode();
+syncBGField();
+draw();
+</script>
+</body>
+</html>
