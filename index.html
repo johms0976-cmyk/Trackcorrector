@@ -3536,7 +3536,7 @@ function drawSimHeat(Q){
   });
 }
 function runSimNow(){
-  const races = parseInt($("b_simruns").value,10) || 200;
+  const races = parseInt($("b_simruns").value,10) || 2000;
   const btn = $("b_sim"); if(!btn) return;
   const old = btn.textContent; btn.textContent = "Running\u2026"; btn.disabled = true;
   setTimeout(()=>{
