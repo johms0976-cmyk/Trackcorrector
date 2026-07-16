@@ -2248,7 +2248,7 @@ $("btnpng").onclick = savePNG;
 /* =====================================================================
    BUILDER FORM
    ===================================================================== */
-const TEXT_FIELDS = {b_name:"name", b_subtitle:"subtitle", b_eyebrow:"eyebrow", b_tagline:"tagline"};
+const TEXT_FIELDS = {b_name:"name", b_subtitle:"subtitle",b_brief:"brief", b_eyebrow:"eyebrow", b_tagline:"tagline"};
 const NUM_FIELDS  = {b_laps:"defaultLaps", b_heat:"heat", b_stress:"stress", b_legends:"legendsLine"};
 
 function syncForm(){
@@ -2650,7 +2650,7 @@ function exportCode(){
 "  key:" + q(B.key) + ",",
 "  name:" + q(B.name) + ", spaces:" + B.spaces + ", defaultLaps:" + B.defaultLaps + ", heat:" + B.heat + ", stress:" + B.stress + ",",
 "  image:" + q(B.image||"") + ", imgW:" + B.imgW + ", imgH:" + B.imgH + ",",
-"  brief:" + q(B.eyebrow) + ",",     
+"  brief:" + q(B.brief) + ",",     
 "  eyebrow:" + q(B.eyebrow) + ",",
 "  subtitle:" + q(B.subtitle) + ",",
 "  tagline:" + q(B.tagline) + ",",
