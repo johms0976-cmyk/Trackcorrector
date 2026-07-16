@@ -436,6 +436,7 @@ function normTrack(t){
   t.imgW = t.imgW || 1200; t.imgH = t.imgH || 800;
   t.image = t.image || "";
   t.name = t.name || t.key;
+  if(t.brief === undefined) t.brief = "";
   if(t.subtitle === undefined) t.subtitle = "";
   if(t.eyebrow === undefined)  t.eyebrow = "";
   if(t.tagline === undefined)  t.tagline = "";
@@ -488,7 +489,8 @@ const BW = 1200, BH = 800;
 
 function freshBuild(){
   return {
-    key:"mytrack", name:"My Circuit", subtitle:"Custom build",
+    key:"mytrack", name:"My Circuit", brief:"brief description of track",
+    subtitle:"Custom build",
     eyebrow:"Custom Grand Prix · My Circuit",
     tagline:"Hand-built fan board",
     spaces:72, defaultLaps:2, heat:6, stress:3, legendsLine:7,
@@ -2412,7 +2414,7 @@ $("b_cloneGo").onclick = ()=>{
     tunnels: normTunnels(s.tunnels, n)
   });
   // everything else the game reads, carried across when the source has it
-  for(const f of ["defaultLaps","heat","stress","legendsLine","terrain","eyebrow",
+  for(const f of ["defaultLaps","heat","stress","legendsLine","terrain","brief","eyebrow",
                   "subtitle","tagline","image","imgW","imgH"])
     if(s[f] !== undefined && s[f] !== "") t[f] = JSON.parse(JSON.stringify(s[f]));
   if(s.plate)      t.plate      = Object.assign(cp(t.plate), cp(s.plate));
@@ -2596,7 +2598,7 @@ function updateDlState(){
   if(b) b.disabled = !REV.text;
 }
 function rememberGameFile(text, name){
-  REV = {text: String(text), name: name || "index_20.html"};
+  REV = {text: String(text), name: name || "index.html"};
   try{ localStorage.setItem("revup_gamefile", JSON.stringify(REV)); }catch(err){ /* too big for storage? memory copy still works this session */ }
   updateDlState();
 }
@@ -2628,7 +2630,8 @@ function serializeTrackJS(t, cname){
 "  key:"+q(t.key)+",",
 "  name:"+q(t.name)+", spaces:"+t.spaces+", defaultLaps:"+(t.defaultLaps||2)+", heat:"+(t.heat===undefined?6:t.heat)+", stress:"+(t.stress===undefined?3:t.stress)+",",
 "  image:"+q(t.image||"")+", imgW:"+(t.imgW||1200)+", imgH:"+(t.imgH||800)+",",
-"  eyebrow:"+q(t.eyebrow)+",",
+"  brief:"+q(t.brief)+",",
+"  eyebrow:"+q(t.eyebrow)+",", 
 "  subtitle:"+q(t.subtitle)+",",
 "  tagline:"+q(t.tagline)+",",
 "  terrain:"+q(t.terrain||"oval")+",",
