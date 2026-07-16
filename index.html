@@ -2817,9 +2817,9 @@ function serializeTrackJS(t, cname, useDefine){
   return [
 "const "+cname+" = "+(useDefine ? "defineTrack({" : "{"),
 "  key:"+q(t.key)+",",
+"  brief:"+q(t.brief)+",",
 "  name:"+q(t.name)+", spaces:"+t.spaces+", defaultLaps:"+(t.defaultLaps||2)+", heat:"+(t.heat===undefined?6:t.heat)+", stress:"+(t.stress===undefined?3:t.stress)+",",
 "  image:"+q(t.image||"")+", imgW:"+(t.imgW||1200)+", imgH:"+(t.imgH||800)+",",
-"  brief:"+q(t.brief)+",",
 "  eyebrow:"+q(t.eyebrow)+",", 
 "  subtitle:"+q(t.subtitle)+",",
 "  tagline:"+q(t.tagline)+",",
